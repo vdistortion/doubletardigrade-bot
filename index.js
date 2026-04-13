@@ -37,6 +37,28 @@ async function getRandomPhoto() {
     return photos[Math.floor(Math.random() * photos.length)];
 }
 
+// Клавиатура
+const fortuneKeyboard = {
+    one_time: false,
+    buttons: [
+        [
+            {
+                action: {
+                    type: 'text',
+                    label: '🔮 Гадание'
+                },
+                color: 'primary'
+            }
+        ]
+    ]
+};
+
+// Скрытая клавиатура
+const hideKeyboard = {
+    buttons: [],
+    one_time: true
+};
+
 vk.updates.on('message_new', async (context) => {
     if (!context.isUser) return;
     const text = context.text?.toLowerCase();
@@ -46,17 +68,32 @@ vk.updates.on('message_new', async (context) => {
             await context.send('Раскидываю карты... 🔮');
             const photo = await getRandomPhoto();
             if (!photo) {
-                await context.send('Альбом пуст, карты закончились 😔');
+                await context.send({
+                    message: 'Альбом пуст, карты закончились 😔',
+                    keyboard: hideKeyboard
+                });
                 return;
             }
             await context.send({
                 message: 'Вот твоё предсказание на сегодня! ✨',
-                attachment: photo
+                attachment: photo,
+                keyboard: hideKeyboard
             });
         } catch (error) {
             console.error('Ошибка:', error);
-            await context.send('Хрустальный шар помутнел... Попробуй позже 😅');
+            await context.send({
+                message: 'Хрустальный шар помутнел... Попробуй позже 😅',
+                keyboard: hideKeyboard
+            });
         }
+        return;
+    }
+
+    if (text === 'меню' || text === 'кнопки') {
+        await context.send({
+            message: 'Вот меню:',
+            keyboard: fortuneKeyboard
+        });
         return;
     }
 
