@@ -63,7 +63,7 @@ vk.updates.on('message_new', async (context) => {
     if (!context.isUser) return;
     const text = context.text?.toLowerCase();
 
-    if (text === 'гадание' || text === 'гадай') {
+    if (['🔮 Гадание', 'гадание', 'гадай'].includes(text)) {
         try {
             await context.send('Раскидываю карты... 🔮');
             const photo = await getRandomPhoto();
