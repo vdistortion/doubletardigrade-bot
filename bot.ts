@@ -1,3 +1,5 @@
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 import { API, Upload, Updates, MessageContext } from 'vk-io';
 import {
     getTodayTortoise,
