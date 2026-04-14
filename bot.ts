@@ -58,12 +58,10 @@ type BotPayload =
     | ManageQuestionsPayload
     | BackPayload;
 
-// Используем process.env.TOKEN
 const api = new API({ token: process.env.TOKEN as string });
 const upload = new Upload({ api });
 const updates = new Updates({ api, upload });
 
-// ID твоей группы VK
 const GROUP_ID = 237639126;
 
 updates.on('message_new', async (context: MessageContext) => {
