@@ -25,8 +25,24 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     return;
   }
 
-  // Подтверждение сервера
+  // ✅ Проверка подписи ТОЛЬКО для обычных событий, не для confirmation
+  if (body.type !== 'confirmation') {
+    const signature = req.headers['x-vk-signature'] as string;
+    const crypto = await import('crypto');
+    const expectedSignature = crypto
+        .createHmac('sha256', process.env.VK_SECRET_KEY!)
+        .update(rawBody)
+        .digest('base64');
+
+    if (!signature || signature !== expectedSignature) {
+      res.status(403).send('Invalid signature');
+      return;
+    }
+  }
+
+  // ✅ Обработка confirmation
   if (body.type === 'confirmation') {
+    console.log('Confirmation request received');
     res.status(200).send(process.env.CONFIRMATION);
     return;
   }
