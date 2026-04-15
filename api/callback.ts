@@ -1,13 +1,7 @@
-import crypto from 'crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { api, GROUP_ID, SUPER_ADMINS, updates } from '../bot.js';
 import { isUserAdmin } from '../lib/admin.js';
 import { addTortoise } from '../lib/supabase.js';
-
-function verifyVKSignature(body: string, signature: string, secret: string): boolean {
-  const hash = crypto.createHmac('sha256', secret).update(body).digest('base64');
-  return hash === signature;
-}
 
 export default async (req: VercelRequest, res: VercelResponse) => {
   const rawBody = await new Promise<string>((resolve, reject) => {
@@ -25,21 +19,20 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     return;
   }
 
-  // ✅ Обработка confirmation (БЕЗ проверки подписи)
+  // ✅ Проверка секретного ключа (ВК передает его прямо в теле запроса)
+  if (process.env.VK_SECRET_KEY) {
+    if (body.secret !== process.env.VK_SECRET_KEY) {
+      console.error('Invalid secret key');
+      res.status(403).send('Invalid secret key');
+      return;
+    }
+  }
+
+  // ✅ Обработка confirmation
   if (body.type === 'confirmation') {
     console.log('Confirmation request received');
     res.status(200).send(process.env.CONFIRMATION);
     return;
-  }
-
-  // ✅ Проверка подписи ТОЛЬКО для остальных событий
-  if (process.env.VK_SECRET_KEY) {
-    const signature = req.headers['x-vk-signature'] as string | undefined;
-    if (!signature || !verifyVKSignature(rawBody, signature, process.env.VK_SECRET_KEY)) {
-      console.error('Invalid signature');
-      res.status(403).send('Invalid signature');
-      return;
-    }
   }
 
   // --- ОБРАБОТЧИК photo_new ---
@@ -74,8 +67,12 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     return;
   }
 
-  // Передаём остальные события в обработчики updates
-  await (updates as any).dispatchMiddleware(body);
+  // Передаём остальные события в обработчики vk-io
+  try {
+    await updates.handleWebhookUpdate(body);
+  } catch (error) {
+    console.error('Error handling update:', error);
+  }
 
   res.status(200).send('ok');
 };
