@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { api, GROUP_ID, SUPER_ADMINS, updates } from '../bot.js';
-import { isUserAdmin } from '../lib/admin';
-import { addTortoise } from '../lib/supabase';
+import { isUserAdmin } from '../lib/admin.js';
+import { addTortoise } from '../lib/supabase.js';
 
 function verifyVKSignature(body: string, signature: string, secret: string): boolean {
   const hash = crypto.createHmac('sha256', secret).update(body).digest('base64');
