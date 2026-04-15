@@ -77,7 +77,22 @@ export async function addTortoise(
 }
 
 export async function deleteTortoise(id: number): Promise<void> {
-  const { error } = await getSupabase().from('tortoises').delete().eq('id', id);
+  // 1. Сначала удаляем все записи у пользователей, которым выпала эта тихоходка
+  const { error: relationError } = await getSupabase()
+      .from('daily_tortoises')
+      .delete()
+      .eq('tortoise_id', id);
+
+  if (relationError) {
+    console.error('Error deleting relations in daily_tortoises:', relationError);
+  }
+
+  // 2. Теперь спокойно удаляем саму тихоходку
+  const { error } = await getSupabase()
+      .from('tortoises')
+      .delete()
+      .eq('id', id);
+
   if (error) console.error('Supabase deleteTortoise error:', error);
 }
 
@@ -103,7 +118,22 @@ export async function addQuestion(
 }
 
 export async function deleteQuestion(id: number): Promise<void> {
-  const { error } = await getSupabase().from('questions').delete().eq('id', id);
+  // 1. Сначала удаляем все ответы пользователей на этот вопрос
+  const { error: relationError } = await getSupabase()
+      .from('daily_quizzes')
+      .delete()
+      .eq('question_id', id);
+
+  if (relationError) {
+    console.error('Error deleting relations in daily_quizzes:', relationError);
+  }
+
+  // 2. Теперь удаляем сам вопрос
+  const { error } = await getSupabase()
+      .from('questions')
+      .delete()
+      .eq('id', id);
+
   if (error) console.error('Supabase deleteQuestion error:', error);
 }
 

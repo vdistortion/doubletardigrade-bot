@@ -132,7 +132,7 @@ updates.on('message_new', async (context: MessageContext) => {
       const list =
         '🐢 Текущие тихоходки:\n\n' +
         tortoises.map((t) => `${t.id}. ${t.text}`).join('\n') +
-        '\n\n💡 Команды:\n/add_tortoise <текст> — добавить\n/delete_tortoise <id> — удалить';
+        '\n\n💡 Команды:\n/add_tardigrade <текст> — добавить\n/delete_tardigrade <id> — удалить';
       await context.send({ message: list, keyboard: adminMenuKeyboard });
       return;
     }
@@ -210,8 +210,8 @@ updates.on('message_new', async (context: MessageContext) => {
 
     // ── Текстовые команды (только для админов) ───────────────────────────────
 
-    if (admin && command.startsWith('/add_tortoise ')) {
-      const text = rawText.slice('/add_tortoise '.length).trim();
+    if (admin && command.startsWith('/add_tardigrade ')) {
+      const text = rawText.slice('/add_tardigrade '.length).trim();
       if (!text) {
         await context.send('❌ Укажи текст тихоходки');
         return;
@@ -221,8 +221,8 @@ updates.on('message_new', async (context: MessageContext) => {
       return;
     }
 
-    if (admin && command.startsWith('/delete_tortoise ')) {
-      const id = parseInt(rawText.slice('/delete_tortoise '.length).trim(), 10);
+    if (admin && command.startsWith('/delete_tardigrade ')) {
+      const id = parseInt(rawText.slice('/delete_tardigrade '.length).trim(), 10);
       if (isNaN(id)) {
         await context.send('❌ Неверный ID');
         return;
