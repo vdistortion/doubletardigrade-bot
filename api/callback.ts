@@ -39,10 +39,10 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     const signature = req.headers['x-vk-signature'] as string;
     console.log(signature);
 
-    // if (!signature || !verifyVKSignature(rawBody, signature, process.env.VK_SECRET_KEY)) {
-    //     res.status(403).send('Invalid signature');
-    //     return;
-    // }
+    if (!signature || !verifyVKSignature(rawBody, signature, process.env.VK_SECRET_KEY)) {
+      res.status(403).send('Invalid signature');
+      return;
+    }
   }
 
   await bot.handleWebhookUpdate(body);

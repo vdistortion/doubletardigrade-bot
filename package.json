@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsc --watch & node --watch dist/api/dev-server.js",
-    "tunnel": "tsc --watch & node --watch dist/api/dev-server.js & lt --port 3000 --subdomain vk-vercel-bot",
+    "dev": "tsc --watch & node dist/api/dev-server.js",
     "build": "tsc",
     "format": "prettier . --write",
     "start": "node dist/api/callback.js"

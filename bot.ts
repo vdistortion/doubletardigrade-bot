@@ -11,7 +11,6 @@ import {
   deleteQuestion,
   getQuestions,
   saveTodayQuizAnswer,
-  Question,
 } from './lib/supabase.js';
 import { isUserAdmin } from './lib/admin.js';
 import { userKeyboard, adminKeyboard, adminMenuKeyboard } from './lib/keyboards.js';
@@ -67,13 +66,33 @@ const updates = new Updates({ api, upload });
 const GROUP_ID = 237639126;
 const SUPER_ADMINS = [786742761];
 
+updates.on('photo_new', async (context: any) => {
+  try {
+    const photo = context.object?.photo ?? context.object;
+    const attachment = photo?.owner_id && photo?.id ? `photo${photo.owner_id}_${photo.id}` : null;
+    const caption = (photo?.text ?? '').trim();
+
+    const [text, description = ''] = caption.split('\n').map((s: string) => s.trim());
+
+    if (!attachment || !text) {
+      return;
+    }
+
+    await addTortoise(text, description, attachment);
+    console.log('Saved tortoise from photo_new:', text);
+  } catch (error) {
+    console.error('photo_new handler error:', error);
+  }
+});
+
 updates.on('message_new', async (context: MessageContext) => {
   if (!context.isUser) return;
 
   const userId = context.senderId;
   const admin = SUPER_ADMINS.includes(userId) || (await isUserAdmin(userId, api, GROUP_ID));
   const payload: BotPayload | undefined = context.messagePayload as BotPayload | undefined;
-  const text = context.text?.toLowerCase().trim();
+  const rawText = context.text?.trim() ?? '';
+  const command = rawText.toLowerCase();
 
   try {
     // === ОБРАБОТКА PAYLOAD (нажатия на кнопки) ===
@@ -82,8 +101,9 @@ updates.on('message_new', async (context: MessageContext) => {
       const keyboard = admin ? adminKeyboard : userKeyboard;
       await context.send({
         message: isNew
-          ? `Сегодня ты ${tortoise} 🐢`
-          : `Ты уже узнала свою тихоходку сегодня!\nСегодня ты ${tortoise} 🐢`,
+          ? `Сегодня ты ${tortoise.text} 🐢\n\n${tortoise.description ?? ''}`
+          : `Ты уже узнала свою тихоходку сегодня!\nСегодня ты ${tortoise.text} 🐢\n\n${tortoise.description ?? ''}`,
+        attachment: tortoise.image ?? undefined,
         keyboard,
       });
       return;
@@ -190,19 +210,19 @@ updates.on('message_new', async (context: MessageContext) => {
     }
 
     // === ОБРАБОТКА ТЕКСТОВЫХ КОМАНД (для админов) ===
-    if (admin && text?.startsWith('/add_tortoise ')) {
-      const message = text.replace('/add_tortoise ', '').trim();
+    if (admin && command.startsWith('/add_tortoise ')) {
+      const message = command.replace('/add_tortoise ', '').trim();
       if (!message) {
         await context.send('❌ Укажи текст тихоходки');
         return;
       }
-      await addTortoise(message);
+      await addTortoise(message, 'Без описания', '');
       await context.send(`✅ Добавлена тихоходка: "${message}"`);
       return;
     }
 
-    if (admin && text?.startsWith('/delete_tortoise ')) {
-      const id = parseInt(text.replace('/delete_tortoise ', '').trim());
+    if (admin && command.startsWith('/delete_tortoise ')) {
+      const id = parseInt(command.replace('/delete_tortoise ', '').trim());
       if (isNaN(id)) {
         await context.send('❌ Неверный ID тихоходки.');
         return;
@@ -212,30 +232,30 @@ updates.on('message_new', async (context: MessageContext) => {
       return;
     }
 
-    if (admin && text?.startsWith('/add_question ')) {
-      const parts = text.replace('/add_question ', '').split('|');
-      if (parts.length < 6) {
+    if (admin && command.startsWith('/add_question')) {
+      const raw = rawText.slice('/add_question'.length).trim();
+      const parts = raw.split('|').map((s) => s.trim());
+
+      if (parts.length !== 6) {
         await context.send(
           '❌ Формат: /add_question <вопрос>|<ответ1>|<ответ2>|<ответ3>|<ответ4>|<номер_правильного>',
         );
         return;
       }
-      const correct = parseInt(parts[5].trim());
-      if (isNaN(correct) || correct < 1 || correct > 4) {
+
+      const correct = Number(parts[5]);
+      if (Number.isNaN(correct) || correct < 1 || correct > 4) {
         await context.send('❌ Номер правильного ответа должен быть от 1 до 4.');
         return;
       }
-      await addQuestion(
-        parts[0].trim(),
-        parts.slice(1, 5).map((o) => o.trim()),
-        correct,
-      );
-      await context.send(`✅ Вопрос добавлен`);
+
+      await addQuestion(parts[0], parts.slice(1, 5), correct);
+      await context.send('✅ Вопрос добавлен');
       return;
     }
 
-    if (admin && text?.startsWith('/delete_question ')) {
-      const id = parseInt(text.replace('/delete_question ', '').trim());
+    if (admin && command.startsWith('/delete_question ')) {
+      const id = parseInt(command.replace('/delete_question ', '').trim());
       if (isNaN(id)) {
         await context.send('❌ Неверный ID вопроса.');
         return;
@@ -246,7 +266,7 @@ updates.on('message_new', async (context: MessageContext) => {
     }
 
     // === ОБРАБОТКА ТЕКСТОВЫХ КОМАНД (для всех пользователей) ===
-    if (text === 'меню' || text === 'привет' || text === 'старт') {
+    if (command === 'меню' || command === 'привет' || command === 'старт') {
       const keyboard = admin ? adminKeyboard : userKeyboard;
       await context.send({
         message: admin ? '👑 Админ-меню:' : '📋 Меню:',
