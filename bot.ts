@@ -28,6 +28,7 @@ type BotPayload =
 // ─── Инициализация ───────────────────────────────────────────────────────────
 
 export const api = new API({ token: process.env.TOKEN as string });
+export const userApi = new API({ token: process.env.USER_TOKEN as string });
 const upload = new Upload({ api });
 
 // updates создаётся один раз и переиспользуется и в polling, и в webhook
@@ -149,7 +150,7 @@ updates.on('message_new', async (context: MessageContext) => {
 
       try {
         // Получаем фото из альбома группы (owner_id для групп всегда с минусом)
-        const photosResponse = await api.photos.get({
+        const photosResponse = await userApi.photos.get({
           owner_id: -GROUP_ID,
           album_id: albumId,
           count: 1000, // Максимум за один запрос
