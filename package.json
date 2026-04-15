@@ -6,6 +6,7 @@
     "dev": "tsc --watch & node --watch dist/api/dev-server.js",
     "tunnel": "tsc --watch & node --watch dist/api/dev-server.js & lt --port 3000 --subdomain vk-vercel-bot",
     "build": "tsc",
+    "format": "prettier . --write",
     "start": "node dist/api/callback.js"
   },
   "dependencies": {
@@ -16,6 +17,7 @@
   "devDependencies": {
     "@types/node": "^20.19.39",
     "@vercel/node": "^5.7.5",
+    "prettier": "3.8.3",
     "typescript": "^5.3.3"
   }
 }

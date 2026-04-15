@@ -12,48 +12,45 @@ console.log('TOKEN:', !!process.env.TOKEN);
 console.log('CONFIRMATION:', process.env.CONFIRMATION);
 
 function verifyVKSignature(body: string, signature: string, secret: string): boolean {
-    const hash = crypto
-        .createHmac('sha256', secret)
-        .update(body)
-        .digest('base64');
+  const hash = crypto.createHmac('sha256', secret).update(body).digest('base64');
 
-    return hash === signature;
+  return hash === signature;
 }
 
 export default async (req: VercelRequest, res: VercelResponse) => {
-    let rawBody = '';
+  let rawBody = '';
 
-    await new Promise<void>((resolve) => {
-        req.on('data', chunk => {
-            rawBody += chunk;
-        });
-        req.on('end', () => resolve());
+  await new Promise<void>((resolve) => {
+    req.on('data', (chunk) => {
+      rawBody += chunk;
     });
+    req.on('end', () => resolve());
+  });
 
-    const body = JSON.parse(rawBody);
-    console.log('INCOMING EVENT:', body.type);
+  const body = JSON.parse(rawBody);
+  console.log('INCOMING EVENT:', body.type);
 
-    if (body?.type === 'confirmation') {
-        res.status(200).send(process.env.CONFIRMATION);
-        return;
-    }
+  if (body?.type === 'confirmation') {
+    res.status(200).send(process.env.CONFIRMATION);
+    return;
+  }
 
-    if (process.env.VK_SECRET_KEY) {
-        const signature = req.headers['x-vk-signature'] as string;
-        console.log(signature);
+  if (process.env.VK_SECRET_KEY) {
+    const signature = req.headers['x-vk-signature'] as string;
+    console.log(signature);
 
-        // if (!signature || !verifyVKSignature(rawBody, signature, process.env.VK_SECRET_KEY)) {
-        //     res.status(403).send('Invalid signature');
-        //     return;
-        // }
-    }
+    // if (!signature || !verifyVKSignature(rawBody, signature, process.env.VK_SECRET_KEY)) {
+    //     res.status(403).send('Invalid signature');
+    //     return;
+    // }
+  }
 
-    await bot.handleWebhookUpdate(body);
-    res.status(200).send('ok');
+  await bot.handleWebhookUpdate(body);
+  res.status(200).send('ok');
 };
 
 export const config = {
-    api: {
-        bodyParser: false,
-    },
+  api: {
+    bodyParser: false,
+  },
 };
