@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/callback.ts": {
-      "includeFiles": "src/bot.ts,src/lib/**",
+      "includeFiles": "src/**",
       "memory": 1024,
       "maxDuration": 30
     }

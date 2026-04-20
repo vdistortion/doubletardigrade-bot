@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
-const { updates } = await import('./bot.js');
+const { updates } = await import('../src/bot.js');
 updates
   .startPolling()
   .then(() => console.log('🤖 Long Poll bot started (DEV)'))
