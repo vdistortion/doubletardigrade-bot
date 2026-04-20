@@ -1,1 +1,1 @@
-export { default, config } from '../src/callback.js';
+export { default, config } from '../dist/callback.js';
