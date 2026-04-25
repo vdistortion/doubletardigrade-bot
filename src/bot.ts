@@ -22,9 +22,6 @@ import {
   quizRestartKeyboard,
 } from './lib/keyboards.js';
 
-console.log(process.env.GROUP_TOKEN);
-console.log(process.env.USER_TOKEN);
-
 const BOT_ICON = '👾';
 const GROUP_TOKEN = process.env.GROUP_TOKEN;
 if (!GROUP_TOKEN) throw new Error('Критическая ошибка: Переменная GROUP_TOKEN не найдена!');
@@ -58,7 +55,8 @@ updates.on('message_new', async (context: MessageContext) => {
   const rawText = context.text?.trim() ?? '';
   const command = rawText.toLowerCase();
 
-  const isEmergencyAccess = isSuperAdmin && command === '/admin';
+  const isAdmin = await checkAdmin(userId);
+  const isEmergencyAccess = isAdmin && command === '/admin';
 
   if (!isEmergencyAccess) {
     const { enable_messages, enable_chats } = await getBotSettings();
@@ -73,9 +71,6 @@ updates.on('message_new', async (context: MessageContext) => {
       return;
     }
   }
-
-  // Проверка админа теперь происходит после первичной фильтрации для оптимизации
-  const isAdmin = await checkAdmin(userId);
 
   // Оригинальный ранний выход для сообщений без payload и не команд, теперь после фильтра режима
   if (!payload && !['/admin', '/start'].includes(command)) return;
