@@ -84,20 +84,21 @@ updates.on('message_new', async (context: MessageContext) => {
       getBotSettings(),
     ]);
 
+    const isBotEnabled =
+      isEmergencyAccess || botSettings.enable_messages || botSettings.enable_chats;
     const keyboard = getMainMenu(
       isAdmin && !context.isChat,
       tardigrades.length > 0,
       questions.length > 0,
       stats.answered > 0 && stats.answered < stats.total,
+      isBotEnabled,
     );
 
     if (command === '/admin' && isAdmin && !context.isChat) {
+      const showFullSettings =
+        isEmergencyAccess || botSettings.enable_messages || botSettings.enable_chats;
       return context.send(`${BOT_ICON} Админ-панель:`, {
-        keyboard: getAdminMenu(
-          questions.length > 0,
-          botSettings.enable_messages,
-          botSettings.enable_chats,
-        ),
+        keyboard: getAdminMenu(questions.length > 0, showFullSettings, showFullSettings),
       });
     }
 

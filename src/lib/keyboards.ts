@@ -3,7 +3,12 @@ export function getMainMenu(
   hasTardigrades: boolean,
   hasQuestions: boolean,
   isQuizInProgress: boolean,
+  isEnabled: boolean = true,
 ) {
+  if (!isEnabled && !isAdmin) {
+    return JSON.stringify({ one_time: false, buttons: [] });
+  }
+
   const buttons = [];
 
   if (hasTardigrades) {
