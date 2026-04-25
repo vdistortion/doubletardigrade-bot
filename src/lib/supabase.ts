@@ -1,16 +1,16 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-let _supabase: SupabaseClient | null = null;
 function getSupabase(): SupabaseClient {
-  if (!_supabase) {
-    const SUPABASE_URL = process.env.SUPABASE_URL;
-    const SUPABASE_KEY = process.env.SUPABASE_KEY;
-    if (!SUPABASE_URL || !SUPABASE_KEY) {
-      throw new Error('Критическая ошибка: Переменные SUPABASE_URL или SUPABASE_KEY не найдены!');
-    }
-    _supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error(
+        `Критическая ошибка: SUPABASE_URL=${SUPABASE_URL}, SUPABASE_KEY=${SUPABASE_KEY ? '[SET]' : '[MISSING]'}`
+    );
   }
-  return _supabase;
+
+  return createClient(SUPABASE_URL, SUPABASE_KEY);
 }
 
 export interface Tardigrade {
