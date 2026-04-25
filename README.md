@@ -1,4 +1,4 @@
-# doubletardigrade-group-bot
+# doubletardigrade-bot
 
 **Права на проект:** Администраторы сообщества [«Фан-клуб Tardigrade Inferno»](https://vk.com/club212742929).
 

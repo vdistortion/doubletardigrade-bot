@@ -1,5 +1,5 @@
 {
-  "name": "doubletardigrade-group-bot",
+  "name": "doubletardigrade-bot",
   "version": "1.0.1",
   "type": "module",
   "scripts": {
@@ -14,8 +14,8 @@
     "singleQuote": true
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.104.0",
-    "@vercel/node": "^5.7.12",
+    "@supabase/supabase-js": "^2.104.1",
+    "@vercel/node": "^5.7.13",
     "dotenv": "^17.4.2",
     "vk-io": "^4.10.1"
   },
