@@ -332,11 +332,26 @@ updates.on('message_new', async (context: MessageContext) => {
       if (!q) return context.send('❌ Вопрос не найден.');
 
       await saveQuizAnswer(String(userId), qid, q.correct === ans);
-      await context.send(
+      const [updatedTardigrades, updatedQuestions, updatedStats] = await Promise.all([
+        getTardigrades(),
+        getQuestions(),
+        getQuizStats(String(userId)),
+      ]);
+
+      const feedbackMessage =
         q.correct === ans
           ? '✅ Верно!'
-          : `❌ Неправильно. Правильный ответ: ${q.options[q.correct - 1]}`,
+          : `❌ Неправильно. Правильный ответ: ${q.options[q.correct - 1]}`;
+
+      const updatedMainMenuKeyboard = getMainMenu(
+        isAdmin && !inChat,
+        updatedTardigrades.length > 0,
+        updatedQuestions.length > 0,
+        updatedStats.answered > 0 && updatedStats.answered < updatedStats.total,
+        isEnabledForCurrentContext,
       );
+
+      await context.send(feedbackMessage, { keyboard: updatedMainMenuKeyboard });
 
       const nextQ = await getUnansweredQuestion(String(userId));
       if (!nextQ) {
