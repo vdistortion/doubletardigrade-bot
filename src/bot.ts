@@ -39,7 +39,9 @@ export const userApi = new API({ token: USER_TOKEN });
 const upload = new Upload({ api });
 export const updates = new Updates({ api, upload });
 
-export const GROUP_ID = 238247894;
+const GROUP_ID = Number(process.env.GROUP_ID);
+if (!GROUP_ID)
+  throw new Error('Критическая ошибка: Переменная GROUP_ID не найдена или не является числом!');
 let currentAlbumId = Number(process.env.ALBUM_ID);
 
 async function checkAdmin(userId: number): Promise<boolean> {
