@@ -39,7 +39,7 @@ export const userApi = new API({ token: USER_TOKEN });
 const upload = new Upload({ api });
 export const updates = new Updates({ api, upload });
 
-export const GROUP_ID = 237639126;
+export const GROUP_ID = 238247894;
 let currentAlbumId = Number(process.env.ALBUM_ID);
 
 async function checkAdmin(userId: number): Promise<boolean> {
@@ -96,11 +96,12 @@ updates.on('message_new', async (context: MessageContext) => {
     // Обработка кнопки "Включить/Выключить для сообщений"
     if (payload?.action === 'toggle_mode_messages') {
       await setBotSetting('enable_messages', !enable_messages);
-      const updatedSettings = await getBotSettings(); // Получаем обновленные настройки
+      const updatedSettings = await getBotSettings();
       return context.send(
         `✅ Режим для сообщений ${updatedSettings.enable_messages ? 'включен' : 'выключен'}.`,
         {
-          keyboard: getBotModeToggleKeyboard(
+          keyboard: getAdminMenu(
+            questions.length > 0,
             updatedSettings.enable_messages,
             updatedSettings.enable_chats,
           ),
@@ -111,11 +112,12 @@ updates.on('message_new', async (context: MessageContext) => {
     // Обработка кнопки "Включить/Выключить для чатов"
     if (payload?.action === 'toggle_mode_chats') {
       await setBotSetting('enable_chats', !enable_chats);
-      const updatedSettings = await getBotSettings(); // Получаем обновленные настройки
+      const updatedSettings = await getBotSettings();
       return context.send(
         `✅ Режим для чатов ${updatedSettings.enable_chats ? 'включен' : 'выключен'}.`,
         {
-          keyboard: getBotModeToggleKeyboard(
+          keyboard: getAdminMenu(
+            questions.length > 0,
             updatedSettings.enable_messages,
             updatedSettings.enable_chats,
           ),
