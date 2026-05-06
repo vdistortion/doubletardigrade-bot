@@ -121,7 +121,7 @@ export function getAdminMenu(hasQuestions: boolean, enableMessages: boolean, ena
     ]);
   }
 
-  buttons.push([
+  const lastRow = [
     {
       action: {
         type: 'text',
@@ -130,12 +130,16 @@ export function getAdminMenu(hasQuestions: boolean, enableMessages: boolean, ena
       },
       color: 'default',
     },
-    {
+  ];
+
+  if (enableMessages) {
+    lastRow.push({
       action: { type: 'text', label: '◀️ Назад', payload: JSON.stringify({ action: 'back' }) },
       color: 'default',
-    },
-  ]);
+    });
+  }
 
+  buttons.push(lastRow);
   return JSON.stringify({ one_time: false, buttons });
 }
 
@@ -161,16 +165,6 @@ export function getBotModeToggleKeyboard(enableMessages: boolean, enableChats: b
             payload: JSON.stringify({ action: 'toggle_mode_chats' }),
           },
           color: enableChats ? 'negative' : 'positive',
-        },
-      ],
-      [
-        {
-          action: {
-            type: 'text',
-            label: '◀️ Назад',
-            payload: JSON.stringify({ action: 'admin_menu' }),
-          },
-          color: 'default',
         },
       ],
     ],

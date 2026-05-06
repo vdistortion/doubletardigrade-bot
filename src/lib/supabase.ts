@@ -6,7 +6,7 @@ function getSupabase(): SupabaseClient {
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error(
-        `Критическая ошибка: SUPABASE_URL=${SUPABASE_URL}, SUPABASE_KEY=${SUPABASE_KEY ? '[SET]' : '[MISSING]'}`
+      `Критическая ошибка: SUPABASE_URL=${SUPABASE_URL}, SUPABASE_KEY=${SUPABASE_KEY ? '[SET]' : '[MISSING]'}`,
     );
   }
 

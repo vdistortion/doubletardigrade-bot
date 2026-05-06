@@ -39,7 +39,9 @@ export const userApi = new API({ token: USER_TOKEN });
 const upload = new Upload({ api });
 export const updates = new Updates({ api, upload });
 
-export const GROUP_ID = 237639126;
+const GROUP_ID = Number(process.env.GROUP_ID);
+if (!GROUP_ID)
+  throw new Error('Критическая ошибка: Переменная GROUP_ID не найдена или не является числом!');
 let currentAlbumId = Number(process.env.ALBUM_ID);
 
 async function checkAdmin(userId: number): Promise<boolean> {
@@ -96,11 +98,12 @@ updates.on('message_new', async (context: MessageContext) => {
     // Обработка кнопки "Включить/Выключить для сообщений"
     if (payload?.action === 'toggle_mode_messages') {
       await setBotSetting('enable_messages', !enable_messages);
-      const updatedSettings = await getBotSettings(); // Получаем обновленные настройки
+      const updatedSettings = await getBotSettings();
       return context.send(
         `✅ Режим для сообщений ${updatedSettings.enable_messages ? 'включен' : 'выключен'}.`,
         {
-          keyboard: getBotModeToggleKeyboard(
+          keyboard: getAdminMenu(
+            questions.length > 0,
             updatedSettings.enable_messages,
             updatedSettings.enable_chats,
           ),
@@ -111,11 +114,12 @@ updates.on('message_new', async (context: MessageContext) => {
     // Обработка кнопки "Включить/Выключить для чатов"
     if (payload?.action === 'toggle_mode_chats') {
       await setBotSetting('enable_chats', !enable_chats);
-      const updatedSettings = await getBotSettings(); // Получаем обновленные настройки
+      const updatedSettings = await getBotSettings();
       return context.send(
         `✅ Режим для чатов ${updatedSettings.enable_chats ? 'включен' : 'выключен'}.`,
         {
-          keyboard: getBotModeToggleKeyboard(
+          keyboard: getAdminMenu(
+            questions.length > 0,
             updatedSettings.enable_messages,
             updatedSettings.enable_chats,
           ),
@@ -328,11 +332,26 @@ updates.on('message_new', async (context: MessageContext) => {
       if (!q) return context.send('❌ Вопрос не найден.');
 
       await saveQuizAnswer(String(userId), qid, q.correct === ans);
-      await context.send(
+      const [updatedTardigrades, updatedQuestions, updatedStats] = await Promise.all([
+        getTardigrades(),
+        getQuestions(),
+        getQuizStats(String(userId)),
+      ]);
+
+      const feedbackMessage =
         q.correct === ans
           ? '✅ Верно!'
-          : `❌ Неправильно. Правильный ответ: ${q.options[q.correct - 1]}`,
+          : `❌ Неправильно. Правильный ответ: ${q.options[q.correct - 1]}`;
+
+      const updatedMainMenuKeyboard = getMainMenu(
+        isAdmin && !inChat,
+        updatedTardigrades.length > 0,
+        updatedQuestions.length > 0,
+        updatedStats.answered > 0 && updatedStats.answered < updatedStats.total,
+        isEnabledForCurrentContext,
       );
+
+      await context.send(feedbackMessage, { keyboard: updatedMainMenuKeyboard });
 
       const nextQ = await getUnansweredQuestion(String(userId));
       if (!nextQ) {
