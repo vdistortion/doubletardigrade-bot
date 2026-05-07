@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
+dotenv.config({ path: '.env.dev' });
 const { updates } = await import('../src/bot.js');
 updates
   .startPolling()

@@ -1,8 +1,0 @@
-{
-  "outputDirectory": "dist",
-  "functions": {
-    "api/callback.ts": {
-      "maxDuration": 30
-    }
-  }
-}

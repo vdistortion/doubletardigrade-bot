@@ -1,0 +1,28 @@
+name: Deploy Release
+
+on:
+  push:
+    branches:
+      - release
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      REPO_NAME: ${{ github.event.repository.name }}
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: REPO_NAME
+          script: |
+            if [ ! -d ~/projects/$REPO_NAME ]; then
+              mkdir -p ~/projects
+              git clone git@github.com:${{ github.repository }}.git ~/projects/$REPO_NAME
+            fi
+            cd ~/projects/$REPO_NAME
+            git pull origin release
+            npm run docker:release:up

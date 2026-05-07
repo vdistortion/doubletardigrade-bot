@@ -13,7 +13,7 @@ import {
   getQuestions,
   getBotSettings,
   setBotSetting,
-} from './lib/supabase.js';
+} from './lib/db.js';
 import { isUserAdmin } from './lib/admin.js';
 import {
   getAdminMenu,
