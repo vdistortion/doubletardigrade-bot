@@ -24,5 +24,18 @@ jobs:
               git clone git@github.com:${{ github.repository }}.git ~/projects/$REPO_NAME
             fi
             cd ~/projects/$REPO_NAME
+
+            mkdir -p ./data/main_db
+
+            echo "GROUP_TOKEN=${{ secrets.GROUP_TOKEN }}" > .env.main
+            echo "USER_TOKEN=${{ secrets.USER_TOKEN }}" >> .env.main
+            echo "ALBUM_ID=${{ secrets.ALBUM_ID }}" >> .env.main
+            echo "GROUP_ID=${{ secrets.GROUP_ID }}" >> .env.main
+            echo "SUPER_ADMINS=${{ secrets.SUPER_ADMINS }}" >> .env.main
+            echo "POSTGRES_DB=postgres" >> .env.main
+            echo "POSTGRES_USER=postgres" >> .env.main
+            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env.main
+            echo "POSTGRES_HOST=db" >> .env.main
+
             git pull origin main
             npm run docker:main:up

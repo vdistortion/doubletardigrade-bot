@@ -24,5 +24,18 @@ jobs:
               git clone git@github.com:${{ github.repository }}.git ~/projects/$REPO_NAME
             fi
             cd ~/projects/$REPO_NAME
+
+            mkdir -p ./data/release_db
+
+            echo "GROUP_TOKEN=${{ secrets.GROUP_TOKEN }}" > .env.release
+            echo "USER_TOKEN=${{ secrets.USER_TOKEN }}" >> .env.release
+            echo "ALBUM_ID=${{ secrets.ALBUM_ID }}" >> .env.release
+            echo "GROUP_ID=${{ secrets.GROUP_ID }}" >> .env.release
+            echo "SUPER_ADMINS=${{ secrets.SUPER_ADMINS }}" >> .env.release
+            echo "POSTGRES_DB=postgres" >> .env.release
+            echo "POSTGRES_USER=postgres" >> .env.release
+            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env.release
+            echo "POSTGRES_HOST=db" >> .env.release
+
             git pull origin release
             npm run docker:release:up
