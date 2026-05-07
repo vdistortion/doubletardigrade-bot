@@ -27,14 +27,14 @@ jobs:
 
             mkdir -p ./data/main_db
 
-            echo "GROUP_TOKEN=${{ secrets.GROUP_TOKEN }}" > .env.main
-            echo "USER_TOKEN=${{ secrets.USER_TOKEN }}" >> .env.main
-            echo "ALBUM_ID=${{ secrets.ALBUM_ID }}" >> .env.main
-            echo "GROUP_ID=${{ secrets.GROUP_ID }}" >> .env.main
-            echo "SUPER_ADMINS=${{ secrets.SUPER_ADMINS }}" >> .env.main
+            echo "GROUP_TOKEN=${{ secrets.GROUP_TOKEN_MAIN }}" > .env.main
+            echo "USER_TOKEN=${{ secrets.USER_TOKEN_MAIN }}" >> .env.main
+            echo "ALBUM_ID=${{ secrets.ALBUM_ID_MAIN }}" >> .env.main
+            echo "GROUP_ID=${{ secrets.GROUP_ID_MAIN }}" >> .env.main
+            echo "SUPER_ADMINS=${{ secrets.SUPER_ADMINS_MAIN }}" >> .env.main
             echo "POSTGRES_DB=postgres" >> .env.main
             echo "POSTGRES_USER=postgres" >> .env.main
-            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env.main
+            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD_MAIN }}" >> .env.main
             echo "POSTGRES_HOST=db" >> .env.main
 
             git pull origin main
