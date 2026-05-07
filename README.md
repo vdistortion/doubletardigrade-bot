@@ -1,9 +1,5 @@
 # doubletardigrade-bot
 
-**Права на проект:** Администраторы сообщества [«Фан-клуб Tardigrade Inferno»](https://vk.com/club212742929).
-
----
-
 ## 📋 Описание функций и кнопок
 
 ### Меню пользователя
@@ -26,44 +22,23 @@
 
 ## 🛠 Настройка и запуск (Инструкция)
 
+Этот бот предназначен для запуска на собственном VPS с использованием Docker и PostgreSQL.
+
 **1. Подготовка ВКонтакте**
 
 - **Ключ доступа группы (GROUP_TOKEN):** В настройках группы (Работа с API -> Ключи доступа) создайте ключ. Разрешите доступ к сообщениям, фотографиям и управлению сообществом.
 - **Личный ключ (USER_TOKEN):** Нужен для получения данных из закрытых или обычных альбомов. Получите его через любой сервис (например, VK Host), выбрав права на «Фотографии».
 - **ID Альбома:** Откройте нужный альбом в браузере. В ссылке после слова `album` будут цифры вида `XXXXX_YYYYY`. Вам нужны цифры после подчеркивания (`YYYYY`).
+- **ID Группы (GROUP_ID):** Можно найти в URL группы (например, `clubXXXXXXXXX`, где `XXXXXXXXX` — это ID).
 
-**2. Подготовка базы данных (Supabase)**
+**2. Подготовка VPS и Docker**
 
-- Создайте проект на [Supabase](https://supabase.com/dashboard/).
-- В разделе **SQL Editor** создайте таблицы (скопируйте и выполните скрипт):
-
-```
-CREATE TABLE tardigrades (id SERIAL PRIMARY KEY, text TEXT, description TEXT, image TEXT);
-CREATE TABLE daily_tardigrades (id SERIAL PRIMARY KEY, user_id TEXT, tardigrade_id INTEGER REFERENCES tardigrades(id), date DATE, UNIQUE(user_id, date));
-CREATE TABLE quiz_questions (id SERIAL PRIMARY KEY, question TEXT, options JSONB, correct INTEGER);
-CREATE TABLE quiz_answers (id SERIAL PRIMARY KEY, user_id TEXT, question_id INTEGER REFERENCES quiz_questions(id) ON DELETE CASCADE, is_correct BOOLEAN, UNIQUE(user_id, question_id));
-
-CREATE TABLE bot_settings (
-    key TEXT PRIMARY KEY,
-    value TEXT
-);
-
-INSERT INTO bot_settings (key, value) VALUES
-('enable_messages', 'false'),
-('enable_chats', 'false');
-```
-
-**3. Деплой на Vercel**
-
-- Подключите репозиторий к [Vercel](https://vercel.com/dashboard/).
-- В настройках проекта (**Settings -> Environment Variables**) добавьте:
-- `GROUP_TOKEN` — ключ группы.
-- `USER_TOKEN` — ваш личный ключ.
-- `SUPABASE_URL` и `SUPABASE_KEY` — из настроек Supabase (Project Settings -> API).
-- `ALBUM_ID` — ID вашего альбома.
-- `SUPER_ADMINS` — ваш цифровой ID ВКонтакте.
-
----
+1.  **Установите Docker и Docker Compose** на ваш VPS, если они еще не установлены.
+2.  **Клонируйте репозиторий** на ваш VPS:
+    ```bash
+    git clone https://github.com/vdistortion/doubletardigrade-bot.git
+    cd doubletardigrade-bot
+    ```
 
 ## ⌨️ Ручные команды для админов
 
@@ -73,3 +48,7 @@ INSERT INTO bot_settings (key, value) VALUES
 - **/album [ID]** — сменить альбом для синхронизации без перезагрузки бота.
 - **/quiz_add Вопрос|НомерПравильного|Вар1|Вар2|...** — добавить вопрос вручную.
 - **/quiz_del [ID]** — удалить конкретный вопрос по его номеру в базе.
+
+---
+
+**Права на проект:** администраторы сообщества [«Фан-клуб Tardigrade Inferno»](https://vk.com/club212742929).
