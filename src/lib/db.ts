@@ -5,7 +5,7 @@ function getPool(): Pool {
   if (!POSTGRES_USER || !POSTGRES_PASSWORD || !POSTGRES_DB || !POSTGRES_HOST) {
     throw new Error('Критическая ошибка: Не все переменные POSTGRES_* найдены!');
   }
-  const url = `postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/${POSTGRES_DB}`;
+  const url = `postgres://${POSTGRES_USER}:${encodeURIComponent(POSTGRES_PASSWORD)}@${POSTGRES_HOST}:5432/${POSTGRES_DB}`;
   return new Pool({ connectionString: url });
 }
 
