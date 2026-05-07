@@ -23,4 +23,3 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: ['node', 'dist/bot.js']
