@@ -13,7 +13,7 @@
     "docker:release:down": "docker compose -f docker-compose.release.yml down",
     "docker:release:clean": "docker compose -f docker-compose.release.yml down -v --rmi all",
     "prepare": "cp -n .env.example .env.dev",
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "format": "prettier . --write '!data'",
     "start": "tsx watch api/dev-server.ts"
   },
