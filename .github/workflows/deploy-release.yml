@@ -1,0 +1,41 @@
+name: Deploy Release
+
+on:
+  push:
+    branches:
+      - release
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      REPO_NAME: ${{ github.event.repository.name }}
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: REPO_NAME
+          script: |
+            if [ ! -d ~/projects/$REPO_NAME ]; then
+              mkdir -p ~/projects
+              git clone git@github.com:${{ github.repository }}.git ~/projects/$REPO_NAME
+            fi
+            cd ~/projects/$REPO_NAME
+
+            mkdir -p ./data/release_db
+
+            echo "GROUP_TOKEN=${{ secrets.GROUP_TOKEN }}" > .env.release
+            echo "USER_TOKEN=${{ secrets.USER_TOKEN }}" >> .env.release
+            echo "ALBUM_ID=${{ secrets.ALBUM_ID }}" >> .env.release
+            echo "GROUP_ID=${{ secrets.GROUP_ID }}" >> .env.release
+            echo "SUPER_ADMINS=${{ secrets.SUPER_ADMINS }}" >> .env.release
+            echo "POSTGRES_DB=postgres" >> .env.release
+            echo "POSTGRES_USER=postgres" >> .env.release
+            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env.release
+            echo "POSTGRES_HOST=db" >> .env.release
+
+            git pull origin release
+            npm run docker:release:up
