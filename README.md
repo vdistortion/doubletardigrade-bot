@@ -67,11 +67,13 @@ cd doubletardigrade-bot
 3. Если используете GitHub Actions для деплоя, настройте SSH-доступ:
    - добавьте публичный SSH-ключ VPS в GitHub;
    - добавьте `github.com` в `~/.ssh/known_hosts`;
+
    ```shell
    ssh-keyscan github.com >> ~/.ssh/known_hosts
    ```
 
    - укажите приватный ключ в `~/.ssh/config`;
+
    ```text
     Host github.com
         Hostname github.com
@@ -99,4 +101,5 @@ cd doubletardigrade-bot
 
 ---
 
-**Права на проект:** администраторы сообщества [«Фан-клуб Tardigrade Inferno»](https://vk.com/club212742929).
+**Права на проект:** администраторы сообщества [«Фан-клуб Tardigrade Inferno»](https://vk.com/club212742929).  
+**Последняя версия исходного кода:** [скачать архив](https://github.com/vdistortion/doubletardigrade-bot/archive/refs/heads/main.zip).
