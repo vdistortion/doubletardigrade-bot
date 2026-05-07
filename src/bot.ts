@@ -82,6 +82,9 @@ updates.on('message_new', async (context: MessageContext) => {
         '/album [ID] - сменить ID альбома',
         '/quiz_add вопрос|номер|вар1|вар2... - добавить вопрос',
         '/quiz_del [ID] - удалить вопрос по ID',
+        '',
+        '🌐 Исходный код:',
+        'https://github.com/vdistortion/doubletardigrade-bot',
       ].join('\n');
       return context.send(helpText, {
         keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
