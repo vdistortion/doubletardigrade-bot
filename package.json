@@ -14,7 +14,7 @@
     "docker:release:clean": "docker compose -f docker-compose.release.yml down -v --rmi all",
     "prepare": "cp -n .env.example .env.dev",
     "build": "tsc",
-    "format": "prettier . --write",
+    "format": "prettier . --write '!data'",
     "start": "tsx watch api/dev-server.ts"
   },
   "prettier": {
