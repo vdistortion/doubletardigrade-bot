@@ -6,7 +6,7 @@ services:
     restart: always
     env_file: .env.main
     volumes:
-      - db_main:/var/lib/postgresql/data
+      - ./data/main_db:/var/lib/postgresql/data
       - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
@@ -24,6 +24,3 @@ services:
       db:
         condition: service_healthy
     command: ['node', 'dist/bot.js']
-
-volumes:
-  db_main:
