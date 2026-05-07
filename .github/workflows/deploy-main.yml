@@ -19,11 +19,12 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           envs: REPO_NAME
           script: |
-            if [ ! -d ~/projects/$REPO_NAME ]; then
+            PROJECT_PATH=~/projects/${REPO_NAME}_main
+            if [ ! -d "$PROJECT_PATH" ]; then
               mkdir -p ~/projects
-              git clone git@github.com:${{ github.repository }}.git ~/projects/$REPO_NAME
+              git clone git@github.com:${{ github.repository }}.git "$PROJECT_PATH"
             fi
-            cd ~/projects/$REPO_NAME
+            cd "$PROJECT_PATH" # Переходим в новую папку
 
             mkdir -p ./data/main_db
 
