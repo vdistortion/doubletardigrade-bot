@@ -1,6 +1,6 @@
 {
   "name": "doubletardigrade-bot",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "docker:dev:up": "docker compose -f docker-compose.dev.yml up -d",
