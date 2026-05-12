@@ -90,6 +90,7 @@ export async function syncAlbum(groupId: number, albumId: number, vkUserApi: any
   const client = await db().connect();
   try {
     await client.query('BEGIN');
+    await client.query('DELETE FROM daily_tardigrades');
     await client.query('DELETE FROM tardigrades');
     let count = 0;
     for (const r of records) {
