@@ -64,25 +64,59 @@ git clone https://github.com/vdistortion/doubletardigrade-bot.git
 cd doubletardigrade-bot
 ```
 
-3. Если используете GitHub Actions для деплоя, настройте SSH-доступ:
-   - добавьте публичный SSH-ключ VPS в GitHub;
-   - добавьте `github.com` в `~/.ssh/known_hosts`;
+### 3. Настройка SSH-доступа для GitHub Actions
 
-   ```shell
-   ssh-keyscan github.com >> ~/.ssh/known_hosts
-   ```
+GitHub Actions подключается к VPS по SSH и запускает деплой. Для этого нужно:
 
-   - укажите приватный ключ в `~/.ssh/config`;
+--- На локальной машине ---
 
-   ```text
-    Host github.com
-        Hostname github.com
-        User git
-        IdentityFile ~/.ssh/id_rsa
-   ```
+Сгенерируйте SSH-ключ и скопируйте его на VPS:
 
-   - сохраните ключ в GitHub Secrets под именем `SSH_PRIVATE_KEY`.
-   - также в GitHub Secrets нужно добавить `VPS_HOST` и `VPS_USERNAME` — это адрес VPS и имя пользователя, под которым выполняется подключение по SSH.
+```shell
+ssh-copy-id user@vps-ip
+```
+
+Приватный ключ (id_ed25519) сохраните в GitHub Secrets под именем SSH_PRIVATE_KEY.
+
+Также добавьте в GitHub Secrets:
+VPS_HOST — IP-адрес или домен вашего VPS
+VPS_USERNAME — имя пользователя для SSH-подключения
+
+--- На VPS ---
+
+Сгенерируйте SSH-ключ для клонирования репозитория с GitHub:
+
+```shell
+ssh-keygen -t ed25519 -C "vps-deploy"
+```
+
+Добавьте GitHub в список доверенных хостов:
+
+```shell
+ssh-keyscan github.com >> ~/.ssh/known_hosts
+```
+
+Укажите ключ в ~/.ssh/config:
+
+```text
+Host github.com
+    Hostname github.com
+    User git
+    IdentityFile ~/.ssh/id_ed25519
+```
+
+--- В настройках репозитория на GitHub ---
+
+Перейдите в Settings -> Deploy keys -> Add deploy key
+Вставьте публичный ключ VPS (содержимое ~/.ssh/id_ed25519.pub)
+Права на запись не нужны.
+
+Проверьте, что всё работает:
+
+```shell
+ssh -T git@github.com
+# Ожидаемый ответ: Hi username! You've successfully authenticated...
+```
 
 ### 4. Запуск бота
 
