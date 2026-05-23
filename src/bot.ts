@@ -177,10 +177,23 @@ updates.on('message_new', async (context: MessageContext) => {
 
     // Обработка кнопки "Синхронизация"
     if (payload?.action === 'sync_album') {
-      const count = await syncAlbum(GROUP_ID, currentAlbumId, userApi);
-      return context.send(`✅ Синхронизация завершена! Объектов: ${count}`, {
-        keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
-      });
+      try {
+        const count = await syncAlbum(GROUP_ID, currentAlbumId, userApi);
+        return context.send(`✅ Синхронизация завершена! Объектов: ${count}`, {
+          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
+        });
+      } catch (error: any) {
+        console.error('Ошибка при синхронизации альбома:', error);
+        let errorMessage =
+          '‼ Не удалось синхронизировать альбом. Пожалуйста, проверьте настройки группы и альбома.';
+        if (error.code === 15 || error.code === 200) {
+          errorMessage =
+            '‼ Не удалось синхронизировать альбом. Убедитесь, что сообщество открыто, и повторите попытку.';
+        }
+        return context.send(errorMessage, {
+          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
+        });
+      }
     }
 
     // Обработка кнопки "Тест выдачи"
