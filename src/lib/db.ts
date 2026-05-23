@@ -40,7 +40,14 @@ export async function getTardigrades(): Promise<Tardigrade[]> {
 export async function getTodayTardigrade(
   userId: string,
 ): Promise<{ tardigrade: Tardigrade; isNew: boolean }> {
-  const today = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Europe/Moscow',
+  };
+  const today = new Intl.DateTimeFormat('en-CA', options).format(now); // YYYY-MM-DD
 
   const { rows } = await db().query<{ tardigrades: Tardigrade }>(
     `SELECT t.id, t.text, t.description, t.image
