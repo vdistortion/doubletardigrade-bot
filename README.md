@@ -57,6 +57,11 @@
 ### 3. Подготовка VPS и Docker
 
 1. Установите **Node.js**, **NPM**, **Docker** и **Docker Compose**.
+
+```shell
+apt update && apt upgrade -y && apt install npm -y && curl -fsSL https://get.docker.com | sh
+```
+
 2. Склонируйте репозиторий:
 
 ```shell
