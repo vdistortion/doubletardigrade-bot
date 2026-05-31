@@ -251,33 +251,6 @@ updates.on('message_new', async (context: MessageContext) => {
       }
     }
 
-    // Обработка вложений (файл CSV)
-    for (const attach of context.attachments) {
-      // Проверяем, что это документ и у него есть поле doc
-      if (attach.type === 'doc' && 'doc' in attach) {
-        const docAttach = attach as { doc: { ext: string; url?: string } };
-        if (docAttach.doc?.ext === 'csv' && docAttach.doc?.url) {
-          try {
-            const response = await fetch(docAttach.doc.url);
-            const csvText = await response.text();
-            const count = await importQuestionsFromCsv(csvText);
-            return context.send(`✅ Импортировано ${count} вопросов из файла.`, {
-              keyboard: getAdminMenu(true, enable_messages, enable_chats, await getQuizCsvUrl()),
-            });
-          } catch (e: any) {
-            return context.send(`❌ Ошибка при импорте файла: ${e.message}`, {
-              keyboard: getAdminMenu(
-                questions.length > 0,
-                enable_messages,
-                enable_chats,
-                await getQuizCsvUrl(),
-              ),
-            });
-          }
-        }
-      }
-    }
-
     // Обработка текста сообщения: поиск ссылки на Google Sheets
     const urlRegex = /https?:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
     const match = rawText.match(urlRegex);
