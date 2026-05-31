@@ -1,3 +1,36 @@
+import type { QuizQuestion } from './db.js';
+
+export function generateShuffledQuestionKeyboard(question: QuizQuestion): string {
+  const optionsWithFlag = question.options.map((text, idx) => ({
+    text,
+    isCorrect: idx === question.correct - 1, // correct — номер от 1
+  }));
+
+  // Алгоритм Фишера-Йетса
+  for (let i = optionsWithFlag.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [optionsWithFlag[i], optionsWithFlag[j]] = [optionsWithFlag[j], optionsWithFlag[i]];
+  }
+
+  return JSON.stringify({
+    inline: true,
+    buttons: optionsWithFlag.map((opt) => [
+      {
+        action: {
+          type: 'text',
+          label: opt.text.slice(0, 40),
+          payload: JSON.stringify({
+            action: 'quiz_ans',
+            qid: question.id,
+            isCorrect: opt.isCorrect,
+          }),
+        },
+        color: 'primary',
+      },
+    ]),
+  });
+}
+
 export function getMainMenu(
   isAdmin: boolean,
   hasTardigrades: boolean,
@@ -50,8 +83,13 @@ export function getMainMenu(
   return JSON.stringify({ one_time: false, buttons });
 }
 
-export function getAdminMenu(hasQuestions: boolean, enableMessages: boolean, enableChats: boolean) {
-  const buttons = [
+export function getAdminMenu(
+  hasQuestions: boolean,
+  enableMessages: boolean,
+  enableChats: boolean,
+  quizCsvUrl: string | null,
+) {
+  const buttons: any[] = [
     [
       {
         action: {
@@ -72,6 +110,38 @@ export function getAdminMenu(hasQuestions: boolean, enableMessages: boolean, ena
     ],
   ];
 
+  // Блок управления вопросами
+  const questionButtons: any[] = [];
+
+  // Кнопка "Загрузить демо" — только если вопросов нет
+  if (!hasQuestions) {
+    questionButtons.push({
+      action: {
+        type: 'text',
+        label: '🧪 Загрузить демо‑вопросы',
+        payload: JSON.stringify({ action: 'load_demo_questions' }),
+      },
+      color: 'positive',
+    });
+  }
+
+  // Если есть сохранённый URL — кнопка "Обновить квиз"
+  if (quizCsvUrl) {
+    questionButtons.push({
+      action: {
+        type: 'text',
+        label: '🔄 Обновить квиз',
+        payload: JSON.stringify({ action: 'refresh_quiz' }),
+      },
+      color: 'primary',
+    });
+  }
+
+  if (questionButtons.length > 0) {
+    buttons.push(questionButtons);
+  }
+
+  // Режим работы (как раньше)
   let modeStatusLabel = 'Режим: Выключен';
   let modeStatusColor: 'negative' | 'positive' | 'primary' = 'negative';
 
@@ -97,35 +167,11 @@ export function getAdminMenu(hasQuestions: boolean, enableMessages: boolean, ena
     },
   ]);
 
-  if (hasQuestions) {
-    buttons.push([
-      {
-        action: {
-          type: 'text',
-          label: '🗑 Удалить все вопросы',
-          payload: JSON.stringify({ action: 'quiz_clear' }),
-        },
-        color: 'negative',
-      },
-    ]);
-  } else {
-    buttons.push([
-      {
-        action: {
-          type: 'text',
-          label: '🧪 Инициализировать квиз',
-          payload: JSON.stringify({ action: 'quiz_init' }),
-        },
-        color: 'positive',
-      },
-    ]);
-  }
-
-  const lastRow = [
+  const lastRow: any[] = [
     {
       action: {
         type: 'text',
-        label: '❓ Команды',
+        label: '❓ Справка',
         payload: JSON.stringify({ action: 'admin_help' }),
       },
       color: 'default',
