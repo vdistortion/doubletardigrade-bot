@@ -58,7 +58,6 @@ getAlbumId()
   })
   .catch((e) => console.error('Не удалось загрузить album_id из БД:', e));
 
-
 async function fetchGoogleSheetCsv(url: string): Promise<string> {
   let exportUrl = url.trim();
   // Если ссылка уже явно ведёт на CSV (содержит output=csv или format=csv), оставляем как есть
@@ -100,6 +99,14 @@ updates.on('message_new', async (context: MessageContext) => {
   const botSettings = await getBotSettings();
   const { enable_messages, enable_chats } = botSettings;
 
+  // Очистка обычной клавиатуры (доступна всем в ЛС, админам в чате)
+  if (command === '/clearkeyboard') {
+    if (inChat && !isAdmin) return; // в чате только админ
+    return context.send('⌨️ Клавиатура скрыта.', {
+      keyboard: JSON.stringify({ buttons: [], one_time: true }),
+    });
+  }
+
   // ─── Админские действия в ЛС (работают всегда) ──────────────────────────
   if (isAdmin && !inChat) {
     // Загружаем вопросы здесь, так как они нужны для админ-меню и некоторых админ-действий
@@ -120,6 +127,7 @@ updates.on('message_new', async (context: MessageContext) => {
         '',
         'Команды:',
         '/start – открыть главное меню',
+        '/clearkeyboard – убрать обычную клавиатуру бота (в чате доступно только админам).',
         '',
         'Загрузка тихоходок дня:',
         '– Кнопка «🔄 Синхронизация» загружает фото и подписи из указанного альбома ВК в базу тихоходок.',
