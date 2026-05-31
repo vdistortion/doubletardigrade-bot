@@ -88,20 +88,20 @@ updates.on('message_new', async (context: MessageContext) => {
   const botSettings = await getBotSettings();
   const { enable_messages, enable_chats } = botSettings;
 
-  // --- Логика для админов (всегда работает в личных сообщениях) ---
-  // Админ-панель и связанные с ней действия доступны только в личных сообщениях
+  // ─── Админские действия в ЛС (работают всегда) ──────────────────────────
   if (isAdmin && !inChat) {
     // Загружаем вопросы здесь, так как они нужны для админ-меню и некоторых админ-действий
     const questions = await getQuestions();
     const quizCsvUrl = await getQuizCsvUrl();
 
-    // Обработка команды /admin или нажатия кнопки "Админ-панель"
+    // /admin или кнопка "Админ-панель" (старый payload 'admin_menu')
     if (command === '/admin' || payload?.action === 'admin_menu') {
       return context.send(`${BOT_ICON} Админ-панель:`, {
         keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
       });
     }
 
+    // Справка
     if (payload?.action === 'admin_help') {
       const helpText = [
         '📖 Справка',
@@ -306,12 +306,11 @@ updates.on('message_new', async (context: MessageContext) => {
     }
   }
 
-  // --- Общая логика бота (работает только если бот включен для текущего контекста) ---
+  // ─── Проверка доступности бота для текущего контекста ──────────────────
   const isEnabledForCurrentContext = (enable_messages && !inChat) || (enable_chats && inChat);
 
   if (!isEnabledForCurrentContext) {
-    // Если бот выключен для текущего контекста (и это не админское действие, которое уже обработано),
-    // то просто игнорируем сообщение.
+    // Выключен для всех, кроме админа в ЛС (его уже обслужили выше)
     return;
   }
 
@@ -320,27 +319,40 @@ updates.on('message_new', async (context: MessageContext) => {
   // 2. ЛИБО это не админ, и бот включен для текущего контекста.
 
   try {
-    // Загружаем данные, необходимые для общих операций бота
+    // ─── Загрузка данных ────────────────────────────────────────────────────
     const [tardigrades, questions, stats] = await Promise.all([
       getTardigrades(),
       getQuestions(),
       getQuizStats(String(userId)),
     ]);
 
-    const keyboard = getMainMenu(
-      isAdmin && !inChat,
-      tardigrades.length > 0,
-      questions.length > 0,
-      stats.answered > 0 && stats.answered < stats.total,
-      isEnabledForCurrentContext,
-    );
+    const hasTardigrades = tardigrades.length > 0;
+    const hasQuestions = questions.length > 0;
+    const hasContent = hasTardigrades || hasQuestions;
 
-    // Обработка команды /start или кнопки "Назад"
-    if (command === '/start' || payload?.action === 'back') {
-      return context.send(`${BOT_ICON} Главное меню:`, { keyboard });
+    // Если контента нет и это не админ в ЛС (админ уже получил бы админ-панель выше) – молчим
+    if (!hasContent) {
+      // Админ в ЛС без контента при /start или admin_menu уже обслужен в блоке выше,
+      // поэтому сюда попадают только обычные пользователи (или админ в чате) – игнорируем
+      return;
     }
 
-    // Обработка кнопки "Тихоходка дня"
+    // ─── Главное меню (для всех, у кого есть контент) ──────────────────────
+    const isQuizInProgress = stats.answered > 0 && stats.answered < stats.total;
+    const mainMenuKeyboard = getMainMenu(
+      isAdmin && !inChat, // показывать шестерёнку только админу в ЛС
+      hasTardigrades,
+      hasQuestions,
+      isQuizInProgress,
+      inChat,
+    );
+
+    // /start или кнопка "Начать" – показываем главное меню
+    if (command === 'Начать' || command === '/start' || payload?.action === 'start') {
+      return context.send(`${BOT_ICON} Главное меню:`, { keyboard: mainMenuKeyboard });
+    }
+
+    // Обработка кнопки «Тихоходка дня»
     if (payload?.action === 'tardigrade_day') {
       const { tardigrade, isNew } = await getTodayTardigrade(String(userId));
       const prefix = isNew
@@ -350,12 +362,12 @@ updates.on('message_new', async (context: MessageContext) => {
         `${BOT_ICON} ${prefix}\n\n✨ ${tardigrade.text}\n\n🔬 ${tardigrade.description || ''}`,
         {
           attachment: tardigrade.image || undefined,
-          keyboard,
+          keyboard: mainMenuKeyboard,
         },
       );
     }
 
-    // Обработка кнопки "Квиз" / "Продолжить квиз"
+    // Обработка кнопки «Квиз» / «Продолжить квиз»
     if (payload?.action === 'quiz') {
       const question = await getUnansweredQuestion(String(userId));
       if (!question) {
@@ -366,20 +378,6 @@ updates.on('message_new', async (context: MessageContext) => {
         else resultMsg += 'Хороший результат!';
         return context.send(resultMsg, { keyboard: quizRestartKeyboard });
       }
-
-      // Подготавливаем варианты с отметкой правильного
-      const rawOptions = question.options;
-      const optionsWithFlag = rawOptions.map((text, idx) => ({
-        text,
-        isCorrect: idx === question.correct - 1, // correct — номер от 1
-      }));
-
-      // Перемешиваем Фишером-Йетсом
-      for (let i = optionsWithFlag.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [optionsWithFlag[i], optionsWithFlag[j]] = [optionsWithFlag[j], optionsWithFlag[i]];
-      }
-
       const qKeyboard = generateShuffledQuestionKeyboard(question);
       return context.send(`${BOT_ICON} Вопрос:\n\n❓ ${question.question}`, {
         keyboard: qKeyboard,
@@ -408,7 +406,7 @@ updates.on('message_new', async (context: MessageContext) => {
         updatedTardigrades.length > 0,
         updatedQuestions.length > 0,
         updatedStats.answered > 0 && updatedStats.answered < updatedStats.total,
-        isEnabledForCurrentContext,
+        inChat,
       );
 
       await context.send(feedbackMessage, { keyboard: updatedMainMenuKeyboard });
@@ -422,36 +420,17 @@ updates.on('message_new', async (context: MessageContext) => {
         );
       }
 
-      // Генерируем следующий вопрос — тоже с перемешиванием (дублируем логику)
-      const nextOptionsWithFlag = nextQ.options.map((text, idx) => ({
-        text,
-        isCorrect: idx === nextQ.correct - 1,
-      }));
-      for (let i = nextOptionsWithFlag.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [nextOptionsWithFlag[i], nextOptionsWithFlag[j]] = [
-          nextOptionsWithFlag[j],
-          nextOptionsWithFlag[i],
-        ];
-      }
-
       const nextKeyboard = generateShuffledQuestionKeyboard(nextQ);
       return context.send(`${BOT_ICON} Следующий вопрос:\n\n❓ ${nextQ.question}`, {
         keyboard: nextKeyboard,
       });
     }
 
-    // Обработка кнопки "Пройти заново" (квиз)
+    // Обработка кнопки «Пройти заново»
     if (payload?.action === 'quiz_reset') {
       await resetQuiz(String(userId));
       return context.send(`${BOT_ICON} Прогресс квиза сброшен. Можно начинать заново!`, {
-        keyboard: getMainMenu(
-          isAdmin && !inChat,
-          tardigrades.length > 0,
-          questions.length > 0,
-          false,
-          isEnabledForCurrentContext,
-        ),
+        keyboard: getMainMenu(isAdmin && !inChat, hasTardigrades, hasQuestions, false, inChat),
       });
     }
   } catch (error) {

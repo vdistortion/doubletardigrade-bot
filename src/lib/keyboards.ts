@@ -31,64 +31,71 @@ export function generateShuffledQuestionKeyboard(question: QuizQuestion): string
   });
 }
 
+/**
+ * Главное меню
+ * @param isAdmin админ в ЛС
+ * @param hasTardigrades есть тихоходки
+ * @param hasQuestions есть вопросы квиза
+ * @param isQuizInProgress квиз начат
+ * @param isChat чат (true) или ЛС (false)
+ */
 export function getMainMenu(
   isAdmin: boolean,
   hasTardigrades: boolean,
   hasQuestions: boolean,
   isQuizInProgress: boolean,
-  isEnabled: boolean = true,
-) {
-  if (!isEnabled && !isAdmin) {
-    return JSON.stringify({ one_time: false, buttons: [] });
-  }
-
-  const buttons = [];
+  isChat: boolean,
+): string {
+  const row: any[] = [];
 
   if (hasTardigrades) {
-    buttons.push([
-      {
-        action: {
-          type: 'text',
-          label: '👾 Тихоходка дня',
-          payload: JSON.stringify({ action: 'tardigrade_day' }),
-        },
-        color: 'primary',
+    row.push({
+      action: {
+        type: 'text',
+        label: '👾 Тихоходка дня',
+        payload: JSON.stringify({ action: 'tardigrade_day' }),
       },
-    ]);
+      color: 'primary',
+    });
+  }
+
+  // Шестерёнка только для админов в личных сообщениях
+  if (isAdmin && !isChat) {
+    row.push({
+      action: {
+        type: 'text',
+        label: '⚙️',
+        payload: JSON.stringify({ action: 'admin_menu' }),
+      },
+      color: 'negative',
+    });
   }
 
   if (hasQuestions) {
-    const label = isQuizInProgress ? '🔬 Продолжить квиз' : '🔬 Квиз';
-    buttons.push([
-      {
-        action: { type: 'text', label: label, payload: JSON.stringify({ action: 'quiz' }) },
-        color: 'secondary',
+    row.push({
+      action: {
+        type: 'text',
+        label: isQuizInProgress ? '🔬 Продолжить квиз' : '🔬 Квиз',
+        payload: JSON.stringify({ action: 'quiz' }),
       },
-    ]);
+      color: 'secondary',
+    });
   }
 
-  if (isAdmin) {
-    buttons.push([
-      {
-        action: {
-          type: 'text',
-          label: '⚙️ Админ-панель',
-          payload: JSON.stringify({ action: 'admin_menu' }),
-        },
-        color: 'negative',
-      },
-    ]);
-  }
+  const buttons = row.length > 0 ? [row] : [];
 
-  return JSON.stringify({ one_time: false, buttons });
+  return JSON.stringify(isChat ? { inline: true, buttons } : { one_time: false, buttons });
 }
 
+/**
+ * Админ-панель
+ */
 export function getAdminMenu(
   hasQuestions: boolean,
   enableMessages: boolean,
   enableChats: boolean,
   quizCsvUrl: string | null,
-) {
+): string {
   const buttons: any[] = [
     [
       {
@@ -136,38 +143,35 @@ export function getAdminMenu(
       color: 'primary',
     });
   }
+  if (questionButtons.length > 0) buttons.push(questionButtons);
 
-  if (questionButtons.length > 0) {
-    buttons.push(questionButtons);
-  }
-
-  // Режим работы (как раньше)
-  let modeStatusLabel = 'Режим: Выключен';
-  let modeStatusColor: 'negative' | 'positive' | 'primary' = 'negative';
-
+  // Режим работы
+  let modeLabel = 'Режим: Выключен';
+  let modeColor: 'negative' | 'positive' | 'primary' = 'negative';
   if (enableMessages && enableChats) {
-    modeStatusLabel = 'Режим: Сообщения и Чаты';
-    modeStatusColor = 'positive';
+    modeLabel = 'Режим: Сообщения и Чаты';
+    modeColor = 'positive';
   } else if (enableMessages) {
-    modeStatusLabel = 'Режим: Только Сообщения';
-    modeStatusColor = 'primary';
+    modeLabel = 'Режим: Только Сообщения';
+    modeColor = 'primary';
   } else if (enableChats) {
-    modeStatusLabel = 'Режим: Только Чаты';
-    modeStatusColor = 'primary';
+    modeLabel = 'Режим: Только Чаты';
+    modeColor = 'primary';
   }
 
   buttons.push([
     {
       action: {
         type: 'text',
-        label: modeStatusLabel,
+        label: modeLabel,
         payload: JSON.stringify({ action: 'bot_mode_toggle_menu' }),
       },
-      color: modeStatusColor,
+      color: modeColor,
     },
   ]);
 
-  const lastRow: any[] = [
+  // Справка
+  buttons.push([
     {
       action: {
         type: 'text',
@@ -176,17 +180,9 @@ export function getAdminMenu(
       },
       color: 'default',
     },
-  ];
+  ]);
 
-  if (enableMessages) {
-    lastRow.push({
-      action: { type: 'text', label: '◀️ Назад', payload: JSON.stringify({ action: 'back' }) },
-      color: 'default',
-    });
-  }
-
-  buttons.push(lastRow);
-  return JSON.stringify({ one_time: false, buttons });
+  return JSON.stringify({ inline: true, buttons });
 }
 
 export function getBotModeToggleKeyboard(enableMessages: boolean, enableChats: boolean) {
