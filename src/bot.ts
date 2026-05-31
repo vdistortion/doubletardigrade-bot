@@ -106,8 +106,8 @@ updates.on('message_new', async (context: MessageContext) => {
     const questions = await getQuestions();
     const quizCsvUrl = await getQuizCsvUrl();
 
-    // /admin или кнопка "Админ-панель" (старый payload 'admin_menu')
-    if (command === '/admin' || payload?.action === 'admin_menu') {
+    // Кнопка "⚙️ Админ-панель"
+    if (payload?.action === 'admin_menu') {
       return context.send(`${BOT_ICON} Админ-панель:`, {
         keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
       });
@@ -120,11 +120,10 @@ updates.on('message_new', async (context: MessageContext) => {
         '',
         'Команды:',
         '/start – открыть главное меню',
-        '/admin – открыть панель управления',
-        '– Чтобы сменить альбом, отправьте ссылку на альбом группы.',
         '',
         'Загрузка тихоходок дня:',
         '– Кнопка «🔄 Синхронизация» загружает фото и подписи из указанного альбома ВК в базу тихоходок.',
+        '– Чтобы сменить альбом, отправьте ссылку на альбом группы.',
         '– Для обновления нажмите «Синхронизация» повторно — старые данные заменятся новыми.',
         '',
         'Импорт вопросов квиза:',
@@ -135,63 +134,55 @@ updates.on('message_new', async (context: MessageContext) => {
         '',
         '🌐 Исходный код: https://github.com/vdistortion/doubletardigrade-bot',
       ].join('\n');
-      return context.send(helpText, {
-        keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
-      });
+      return context.send(helpText);
     }
 
-    // Обработка кнопки "Режим: Выключен/Включен"
+    // Режим работы бота
     if (payload?.action === 'bot_mode_toggle_menu') {
       return context.send(`${BOT_ICON} Управление режимом бота:`, {
         keyboard: getBotModeToggleKeyboard(enable_messages, enable_chats),
       });
     }
 
-    // Обработка кнопки "Включить/Выключить для сообщений"
+    // Переключение режима для сообщений
     if (payload?.action === 'toggle_mode_messages') {
       await setBotSetting('enable_messages', !enable_messages);
       const updatedSettings = await getBotSettings();
       return context.send(
         `✅ Режим для сообщений ${updatedSettings.enable_messages ? 'включен' : 'выключен'}.`,
-        {
-          keyboard: getAdminMenu(
-            questions.length > 0,
-            updatedSettings.enable_messages,
-            updatedSettings.enable_chats,
-            quizCsvUrl,
-          ),
-        },
       );
     }
 
-    // Обработка кнопки "Включить/Выключить для чатов"
+    // Переключение режима для чатов
     if (payload?.action === 'toggle_mode_chats') {
       await setBotSetting('enable_chats', !enable_chats);
       const updatedSettings = await getBotSettings();
       return context.send(
         `✅ Режим для чатов ${updatedSettings.enable_chats ? 'включен' : 'выключен'}.`,
-        {
-          keyboard: getAdminMenu(
-            questions.length > 0,
-            updatedSettings.enable_messages,
-            updatedSettings.enable_chats,
-            quizCsvUrl,
-          ),
-        },
       );
     }
 
-    // Обработка кнопки "Синхронизация"
+    // Синхронизация альбома
     if (payload?.action === 'sync_album') {
       if (!currentAlbumId) {
-        return context.send('❌ Альбом не задан. Отправьте ссылку на альбом.', {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
-        });
+        return context.send('❌ Альбом не задан. Отправьте ссылку на альбом.');
       }
       try {
         const count = await syncAlbum(GROUP_ID, currentAlbumId, userApi);
+        // Обновляем меню после синхронизации
+        const [updatedTardigrades, updatedQuestions] = await Promise.all([
+          getTardigrades(),
+          getQuestions(),
+        ]);
+        const updatedMainMenuKeyboard = getMainMenu(
+          true,
+          updatedTardigrades.length > 0,
+          updatedQuestions.length > 0,
+          false,
+          false,
+        );
         return context.send(`✅ Синхронизация завершена! Объектов: ${count}`, {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
+          keyboard: updatedMainMenuKeyboard,
         });
       } catch (error: any) {
         console.error('Ошибка при синхронизации альбома:', error);
@@ -201,13 +192,11 @@ updates.on('message_new', async (context: MessageContext) => {
           errorMessage =
             '‼ Не удалось синхронизировать альбом. Убедитесь, что сообщество открыто, и повторите попытку.';
         }
-        return context.send(errorMessage, {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
-        });
+        return context.send(errorMessage);
       }
     }
 
-    // Обработка кнопки "Тест выдачи"
+    // Тест выдачи
     if (payload?.action === 'test_tardigrade') {
       const tardigrades = await getTardigrades(); // Загружаем тихоходок для теста
       if (!tardigrades.length) return context.send('❌ Пусто.');
@@ -215,69 +204,93 @@ updates.on('message_new', async (context: MessageContext) => {
       return context.send(`🧪 Тест:\n\n${rand.text}`, { attachment: rand.image || undefined });
     }
 
-    // Обработка ссылки на альбом VK
+    // Обработка ссылки на альбом VK (автосинхронизация)
     const albumRegex = /album-(\d+)_(\d+)/;
     const albumMatch = rawText.match(albumRegex);
     if (albumMatch) {
-      const ownerId = parseInt(albumMatch[1], 10); // в ссылке всегда положительный
+      const ownerId = parseInt(albumMatch[1], 10);
       const albumId = parseInt(albumMatch[2], 10);
       if (Math.abs(ownerId) === GROUP_ID) {
         currentAlbumId = albumId;
         try {
           await setAlbumId(albumId);
-          return context.send(`✅ Альбом обновлён: ID ${albumId}`, {
-            keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
+          // Автоматическая синхронизация
+          const count = await syncAlbum(GROUP_ID, albumId, userApi);
+          const [updatedTardigrades, updatedQuestions] = await Promise.all([
+            getTardigrades(),
+            getQuestions(),
+          ]);
+          const updatedMainMenuKeyboard = getMainMenu(
+            true,
+            updatedTardigrades.length > 0,
+            updatedQuestions.length > 0,
+            false,
+            false,
+          );
+          return context.send(`✅ Альбом обновлён и синхронизирован. Объектов: ${count}`, {
+            keyboard: updatedMainMenuKeyboard,
           });
         } catch (e: any) {
-          return context.send(`❌ Ошибка сохранения альбома: ${e.message}`, {
-            keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
-          });
+          // Альбом сохранён, но синхронизация провалилась
+          return context.send(`❌ Альбом сохранён, но синхронизация не удалась: ${e.message}`);
         }
       } else {
-        return context.send('❌ Альбом не принадлежит этому сообществу.', {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
-        });
+        return context.send('❌ Альбом не принадлежит этому сообществу.');
       }
     }
 
-    // CSV
+    // Загрузка демо-вопросов
     if (payload?.action === 'load_demo_questions') {
       try {
         const filePath = join(process.cwd(), 'demo_questions.csv');
         const csvText = await readFile(filePath, { encoding: 'utf-8' });
         const count = await importQuestionsFromCsv(csvText);
+        const [updatedTardigrades, updatedQuestions] = await Promise.all([
+          getTardigrades(),
+          getQuestions(),
+        ]);
+        const updatedMainMenuKeyboard = getMainMenu(
+          true,
+          updatedTardigrades.length > 0,
+          updatedQuestions.length > 0,
+          false,
+          false,
+        );
         return context.send(`✅ Загружено ${count} демо‑вопросов.`, {
-          keyboard: getAdminMenu(true, enable_messages, enable_chats, await getQuizCsvUrl()),
+          keyboard: updatedMainMenuKeyboard,
         });
       } catch (e: any) {
-        return context.send(`❌ Ошибка загрузки демо: ${e.message}`, {
-          keyboard: getAdminMenu(
-            questions.length > 0,
-            enable_messages,
-            enable_chats,
-            await getQuizCsvUrl(),
-          ),
-        });
+        return context.send(`❌ Ошибка загрузки демо: ${e.message}`);
       }
     }
 
+    // Обновление квиза из сохранённой ссылки
     if (payload?.action === 'refresh_quiz') {
       const url = await getQuizCsvUrl();
       if (!url) return context.send('❌ Нет сохранённой ссылки.');
       try {
         const csvText = await fetchGoogleSheetCsv(url);
         const count = await importQuestionsFromCsv(csvText);
+        const [updatedTardigrades, updatedQuestions] = await Promise.all([
+          getTardigrades(),
+          getQuestions(),
+        ]);
+        const updatedMainMenuKeyboard = getMainMenu(
+          true,
+          updatedTardigrades.length > 0,
+          updatedQuestions.length > 0,
+          false,
+          false,
+        );
         return context.send(`✅ Квиз обновлён из таблицы. Загружено ${count} вопросов.`, {
-          keyboard: getAdminMenu(true, enable_messages, enable_chats, url),
+          keyboard: updatedMainMenuKeyboard,
         });
       } catch (e: any) {
-        return context.send(`❌ Не удалось обновить квиз: ${e.message}`, {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, url),
-        });
+        return context.send(`❌ Не удалось обновить квиз: ${e.message}`);
       }
     }
 
-    // Обработка текста сообщения: поиск ссылки на Google Sheets
+    // Импорт вопросов по ссылке на Google Таблицу
     const urlRegex = /https?:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
     const match = rawText.match(urlRegex);
     if (match) {
@@ -285,22 +298,26 @@ updates.on('message_new', async (context: MessageContext) => {
       try {
         const csvText = await fetchGoogleSheetCsv(url);
         const count = await importQuestionsFromCsv(csvText);
-        await setQuizCsvUrl(url); // сохраняем исходную ссылку
+        await setQuizCsvUrl(url);
+        const [updatedTardigrades, updatedQuestions] = await Promise.all([
+          getTardigrades(),
+          getQuestions(),
+        ]);
+        const updatedMainMenuKeyboard = getMainMenu(
+          true,
+          updatedTardigrades.length > 0,
+          updatedQuestions.length > 0,
+          false,
+          false,
+        );
         return context.send(
           `✅ Импортировано ${count} вопросов из Google Таблицы. Ссылка сохранена для автообновления.`,
           {
-            keyboard: getAdminMenu(true, enable_messages, enable_chats, url),
+            keyboard: updatedMainMenuKeyboard,
           },
         );
       } catch (e: any) {
-        return context.send(`❌ Не удалось загрузить таблицу: ${e.message}`, {
-          keyboard: getAdminMenu(
-            questions.length > 0,
-            enable_messages,
-            enable_chats,
-            await getQuizCsvUrl(),
-          ),
-        });
+        return context.send(`❌ Не удалось загрузить таблицу: ${e.message}`);
       }
     }
   }
@@ -347,7 +364,7 @@ updates.on('message_new', async (context: MessageContext) => {
     );
 
     // /start или кнопка "Начать" – показываем главное меню
-    if (command === 'Начать' || command === '/start' || payload?.action === 'start') {
+    if (command === 'начать' || command === '/start' || payload?.action === 'start') {
       return context.send(`${BOT_ICON} Главное меню:`, { keyboard: mainMenuKeyboard });
     }
 

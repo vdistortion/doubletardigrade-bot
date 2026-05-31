@@ -46,10 +46,26 @@ export function getMainMenu(
   isQuizInProgress: boolean,
   isChat: boolean,
 ): string {
-  const row: any[] = [];
+  const buttons: any[] = [];
 
+  // Верхний ряд: только для админов в ЛС — кнопка админ-панели
+  if (isAdmin && !isChat) {
+    buttons.push([
+      {
+        action: {
+          type: 'text',
+          label: '⚙️ Админ-панель',
+          payload: JSON.stringify({ action: 'admin_menu' }),
+        },
+        color: 'negative',
+      },
+    ]);
+  }
+
+  // Нижний ряд: основные кнопки (Тихоходка и Квиз)
+  const mainRow: any[] = [];
   if (hasTardigrades) {
-    row.push({
+    mainRow.push({
       action: {
         type: 'text',
         label: '👾 Тихоходка дня',
@@ -58,21 +74,8 @@ export function getMainMenu(
       color: 'primary',
     });
   }
-
-  // Шестерёнка только для админов в личных сообщениях
-  if (isAdmin && !isChat) {
-    row.push({
-      action: {
-        type: 'text',
-        label: '⚙️',
-        payload: JSON.stringify({ action: 'admin_menu' }),
-      },
-      color: 'negative',
-    });
-  }
-
   if (hasQuestions) {
-    row.push({
+    mainRow.push({
       action: {
         type: 'text',
         label: isQuizInProgress ? '🔬 Продолжить квиз' : '🔬 Квиз',
@@ -81,8 +84,9 @@ export function getMainMenu(
       color: 'secondary',
     });
   }
-
-  const buttons = row.length > 0 ? [row] : [];
+  if (mainRow.length > 0) {
+    buttons.push(mainRow);
+  }
 
   return JSON.stringify(isChat ? { inline: true, buttons } : { one_time: false, buttons });
 }
