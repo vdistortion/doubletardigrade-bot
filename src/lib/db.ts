@@ -287,3 +287,18 @@ export async function setBotSetting(
     [key, String(value)],
   );
 }
+
+export async function getAlbumId(): Promise<number | null> {
+  const { rows } = await db().query<{ value: string }>(
+    "SELECT value FROM bot_settings WHERE key = 'album_id'",
+  );
+  return rows[0] ? parseInt(rows[0].value, 10) : null;
+}
+
+export async function setAlbumId(albumId: number): Promise<void> {
+  await db().query(
+    `INSERT INTO bot_settings (key, value) VALUES ('album_id', $1)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [String(albumId)],
+  );
+}

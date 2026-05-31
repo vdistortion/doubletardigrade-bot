@@ -31,8 +31,6 @@ jobs:
 
             echo "GROUP_TOKEN=${{ secrets.GROUP_TOKEN_MAIN }}" > .env.main
             echo "USER_TOKEN=${{ secrets.USER_TOKEN_MAIN }}" >> .env.main
-            echo "ALBUM_ID=${{ secrets.ALBUM_ID_MAIN }}" >> .env.main
-            echo "GROUP_ID=${{ secrets.GROUP_ID_MAIN }}" >> .env.main
             echo "SUPER_ADMINS=${{ secrets.SUPER_ADMINS_MAIN }}" >> .env.main
             echo "POSTGRES_DB=postgres" >> .env.main
             echo "POSTGRES_USER=postgres" >> .env.main

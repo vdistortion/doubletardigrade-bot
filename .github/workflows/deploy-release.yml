@@ -30,8 +30,6 @@ jobs:
 
             echo "GROUP_TOKEN=${{ secrets.GROUP_TOKEN }}" > .env.release
             echo "USER_TOKEN=${{ secrets.USER_TOKEN }}" >> .env.release
-            echo "ALBUM_ID=${{ secrets.ALBUM_ID }}" >> .env.release
-            echo "GROUP_ID=${{ secrets.GROUP_ID }}" >> .env.release
             echo "SUPER_ADMINS=${{ secrets.SUPER_ADMINS }}" >> .env.release
             echo "POSTGRES_DB=postgres" >> .env.release
             echo "POSTGRES_USER=postgres" >> .env.release

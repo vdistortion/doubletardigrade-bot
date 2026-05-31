@@ -15,6 +15,8 @@ import {
   getQuestions,
   getBotSettings,
   setBotSetting,
+  getAlbumId,
+  setAlbumId,
 } from './lib/db.js';
 import { isUserAdmin } from './lib/admin.js';
 import {
@@ -42,10 +44,20 @@ export const userApi = new API({ token: USER_TOKEN });
 const upload = new Upload({ api });
 export const updates = new Updates({ api, upload });
 
-const GROUP_ID = Number(process.env.GROUP_ID);
+const response = await api.groups.getById({});
+const groupInfo = response.groups[0];
+const GROUP_ID = groupInfo.id;
 if (!GROUP_ID)
   throw new Error('Критическая ошибка: Переменная GROUP_ID не найдена или не является числом!');
-let currentAlbumId = Number(process.env.ALBUM_ID);
+let currentAlbumId: number | null = null;
+
+// Асинхронно подгружаем сохранённый альбом из БД
+getAlbumId()
+  .then((id) => {
+    if (id) currentAlbumId = id;
+  })
+  .catch((e) => console.error('Не удалось загрузить album_id из БД:', e));
+
 
 async function fetchGoogleSheetCsv(url: string): Promise<string> {
   let exportUrl = url.trim();
@@ -109,7 +121,7 @@ updates.on('message_new', async (context: MessageContext) => {
         'Команды:',
         '/start – открыть главное меню',
         '/admin – открыть панель управления',
-        '/album [ID] – сменить ID альбома для синхронизации',
+        '– Чтобы сменить альбом, отправьте ссылку на альбом группы.',
         '',
         'Загрузка тихоходок дня:',
         '– Кнопка «🔄 Синхронизация» загружает фото и подписи из указанного альбома ВК в базу тихоходок.',
@@ -171,6 +183,11 @@ updates.on('message_new', async (context: MessageContext) => {
 
     // Обработка кнопки "Синхронизация"
     if (payload?.action === 'sync_album') {
+      if (!currentAlbumId) {
+        return context.send('❌ Альбом не задан. Отправьте ссылку на альбом.', {
+          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
+        });
+      }
       try {
         const count = await syncAlbum(GROUP_ID, currentAlbumId, userApi);
         return context.send(`✅ Синхронизация завершена! Объектов: ${count}`, {
@@ -198,17 +215,26 @@ updates.on('message_new', async (context: MessageContext) => {
       return context.send(`🧪 Тест:\n\n${rand.text}`, { attachment: rand.image || undefined });
     }
 
-    // Обработка команды /album [ID]
-    if (command.startsWith('/album ')) {
-      const newAlbumId = parseInt(command.split(' ')[1]);
-      if (!isNaN(newAlbumId) && newAlbumId > 0) {
-        currentAlbumId = newAlbumId;
-        // Можно добавить сохранение currentAlbumId в Supabase для персистентности
-        return context.send(`✅ ID альбома изменен на ${newAlbumId}.`, {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
-        });
+    // Обработка ссылки на альбом VK
+    const albumRegex = /album-(\d+)_(\d+)/;
+    const albumMatch = rawText.match(albumRegex);
+    if (albumMatch) {
+      const ownerId = parseInt(albumMatch[1], 10); // в ссылке всегда положительный
+      const albumId = parseInt(albumMatch[2], 10);
+      if (Math.abs(ownerId) === GROUP_ID) {
+        currentAlbumId = albumId;
+        try {
+          await setAlbumId(albumId);
+          return context.send(`✅ Альбом обновлён: ID ${albumId}`, {
+            keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
+          });
+        } catch (e: any) {
+          return context.send(`❌ Ошибка сохранения альбома: ${e.message}`, {
+            keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
+          });
+        }
       } else {
-        return context.send('❌ Неверный ID альбома.', {
+        return context.send('❌ Альбом не принадлежит этому сообществу.', {
           keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
         });
       }
