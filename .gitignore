@@ -3,3 +3,4 @@ node_modules
 dist
 .env.*
 !.env.example
+/data/dev_db

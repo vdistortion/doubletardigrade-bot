@@ -125,24 +125,85 @@ export async function getQuestions(): Promise<QuizQuestion[]> {
   return rows;
 }
 
-export async function addQuizQuestion(
-  question: string,
-  options: string[],
-  correct: number,
-): Promise<void> {
-  await db().query('INSERT INTO quiz_questions (question, options, correct) VALUES ($1, $2, $3)', [
-    question,
-    JSON.stringify(options),
-    correct,
-  ]);
+// Добавим функцию парсинга CSV и импорта
+export async function importQuestionsFromCsv(csvText: string): Promise<number> {
+  const lines = csvText.split(/\r?\n/).filter((line) => line.trim() !== '');
+  const questions: { question: string; options: string[]; correct: number }[] = [];
+
+  for (const line of lines) {
+    // Разбиваем с учётом возможных кавычек
+    const parts = parseCsvLine(line);
+    if (parts.length < 4) continue; // минимум: вопрос, номер, 2 варианта
+    const question = parts[0].trim();
+    const correctNum = parseInt(parts[1].trim(), 10);
+    const options = parts
+      .slice(2)
+      .map((s) => s.trim())
+      .filter((s) => s !== '');
+    if (isNaN(correctNum) || correctNum < 1 || correctNum > options.length) continue;
+    if (options.length < 2) continue;
+    questions.push({ question, options, correct: correctNum });
+  }
+
+  if (questions.length === 0) throw new Error('Не найдено ни одного корректного вопроса в CSV');
+
+  const client = await db().connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM quiz_questions');
+    for (const q of questions) {
+      await client.query(
+        'INSERT INTO quiz_questions (question, options, correct) VALUES ($1, $2, $3)',
+        [q.question, JSON.stringify(q.options), q.correct],
+      );
+    }
+    await client.query('COMMIT');
+    return questions.length;
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
-export async function deleteQuestion(id: number): Promise<void> {
-  await db().query('DELETE FROM quiz_questions WHERE id = $1', [id]);
+// Простейший парсер CSV-строки (без вложенных кавычек, для наших целей хватит)
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (const ch of line) {
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
 }
 
-export async function deleteAllQuestions(): Promise<void> {
-  await db().query('DELETE FROM quiz_questions');
+// Работа с URL квиза
+export async function getQuizCsvUrl(): Promise<string | null> {
+  const { rows } = await db().query<{ value: string }>(
+    "SELECT value FROM bot_settings WHERE key = 'quiz_csv_url'",
+  );
+  return rows[0]?.value || null;
+}
+
+export async function setQuizCsvUrl(url: string | null): Promise<void> {
+  if (url) {
+    await db().query(
+      `INSERT INTO bot_settings (key, value) VALUES ('quiz_csv_url', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [url],
+    );
+  } else {
+    await db().query("DELETE FROM bot_settings WHERE key = 'quiz_csv_url'");
+  }
 }
 
 export async function getUnansweredQuestion(userId: string): Promise<QuizQuestion | null> {
@@ -224,5 +285,20 @@ export async function setBotSetting(
     `INSERT INTO bot_settings (key, value) VALUES ($1, $2)
         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
     [key, String(value)],
+  );
+}
+
+export async function getAlbumId(): Promise<number | null> {
+  const { rows } = await db().query<{ value: string }>(
+    "SELECT value FROM bot_settings WHERE key = 'album_id'",
+  );
+  return rows[0] ? parseInt(rows[0].value, 10) : null;
+}
+
+export async function setAlbumId(albumId: number): Promise<void> {
+  await db().query(
+    `INSERT INTO bot_settings (key, value) VALUES ('album_id', $1)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+    [String(albumId)],
   );
 }

@@ -1,10 +1,12 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { API, Upload, Updates, MessageContext } from 'vk-io';
 import {
   getTodayTardigrade,
   syncAlbum,
-  addQuizQuestion,
-  deleteQuestion,
-  deleteAllQuestions,
+  getQuizCsvUrl,
+  setQuizCsvUrl,
+  importQuestionsFromCsv,
   getUnansweredQuestion,
   saveQuizAnswer,
   getQuizStats,
@@ -13,9 +15,12 @@ import {
   getQuestions,
   getBotSettings,
   setBotSetting,
+  getAlbumId,
+  setAlbumId,
 } from './lib/db.js';
 import { isUserAdmin } from './lib/admin.js';
 import {
+  generateShuffledQuestionKeyboard,
   getAdminMenu,
   getBotModeToggleKeyboard,
   getMainMenu,
@@ -39,10 +44,43 @@ export const userApi = new API({ token: USER_TOKEN });
 const upload = new Upload({ api });
 export const updates = new Updates({ api, upload });
 
-const GROUP_ID = Number(process.env.GROUP_ID);
+const response = await api.groups.getById({});
+const groupInfo = response.groups[0];
+const GROUP_ID = groupInfo.id;
 if (!GROUP_ID)
   throw new Error('Критическая ошибка: Переменная GROUP_ID не найдена или не является числом!');
-let currentAlbumId = Number(process.env.ALBUM_ID);
+let currentAlbumId: number | null = null;
+
+// Асинхронно подгружаем сохранённый альбом из БД
+getAlbumId()
+  .then((id) => {
+    if (id) currentAlbumId = id;
+  })
+  .catch((e) => console.error('Не удалось загрузить album_id из БД:', e));
+
+async function fetchGoogleSheetCsv(url: string): Promise<string> {
+  let exportUrl = url.trim();
+  // Если ссылка уже явно ведёт на CSV (содержит output=csv или format=csv), оставляем как есть
+  if (exportUrl.includes('output=csv') || exportUrl.includes('format=csv')) {
+    // ничего не меняем
+  }
+  // Если это опубликованный документ (содержит /pub?)
+  else if (exportUrl.includes('/pub?')) {
+    exportUrl = exportUrl.replace(/\?.*$/, '') + '?output=csv';
+  }
+  // Обычная ссылка на редактирование/просмотр
+  else {
+    // Убираем всё после ? и добавляем /export?format=csv
+    exportUrl =
+      exportUrl.split('?')[0].replace(/\/(edit|htmlview|view)(\?.*)?$/, '') + '/export?format=csv';
+  }
+
+  const response = await fetch(exportUrl);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const text = await response.text();
+  if (!text.trim()) throw new Error('Получен пустой CSV');
+  return text;
+}
 
 async function checkAdmin(userId: number): Promise<boolean> {
   return SUPER_ADMINS.includes(userId) || (await isUserAdmin(userId, api, GROUP_ID));
@@ -61,126 +99,98 @@ updates.on('message_new', async (context: MessageContext) => {
   const botSettings = await getBotSettings();
   const { enable_messages, enable_chats } = botSettings;
 
-  // --- Логика для админов (всегда работает в личных сообщениях) ---
-  // Админ-панель и связанные с ней действия доступны только в личных сообщениях
+  // Очистка обычной клавиатуры (доступна всем в ЛС, админам в чате)
+  if (command === '/clearkeyboard') {
+    if (inChat && !isAdmin) return; // в чате только админ
+    return context.send('⌨️ Клавиатура скрыта.', {
+      keyboard: JSON.stringify({ buttons: [], one_time: true }),
+    });
+  }
+
+  // ─── Админские действия в ЛС (работают всегда) ──────────────────────────
   if (isAdmin && !inChat) {
     // Загружаем вопросы здесь, так как они нужны для админ-меню и некоторых админ-действий
     const questions = await getQuestions();
+    const quizCsvUrl = await getQuizCsvUrl();
 
-    // Обработка команды /admin или нажатия кнопки "Админ-панель"
-    if (command === '/admin' || payload?.action === 'admin_menu') {
+    // Кнопка "⚙️ Админ-панель"
+    if (payload?.action === 'admin_menu') {
       return context.send(`${BOT_ICON} Админ-панель:`, {
-        keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
+        keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
       });
     }
 
+    // Справка
     if (payload?.action === 'admin_help') {
       const helpText = [
-        '📖 Справка по командам:',
-        '/start - начать',
-        '/admin - открыть панель управления',
-        '/album [ID] - сменить ID альбома',
-        '/quiz_add вопрос|номер|вар1|вар2... - добавить вопрос',
-        '/quiz_del [ID] - удалить вопрос по ID',
+        '📖 Справка',
         '',
-        '🌐 Исходный код:',
-        'https://github.com/vdistortion/doubletardigrade-bot',
+        'Команды:',
+        '/start – открыть главное меню',
+        '/clearkeyboard – убрать обычную клавиатуру бота (в чате доступно только админам).',
+        '',
+        'Загрузка тихоходок дня:',
+        '– Кнопка «🔄 Синхронизация» загружает фото и подписи из указанного альбома ВК в базу тихоходок.',
+        '– Чтобы сменить альбом, отправьте ссылку на альбом группы.',
+        '– Для обновления нажмите «Синхронизация» повторно — старые данные заменятся новыми.',
+        '',
+        'Импорт вопросов квиза:',
+        '– Отправьте боту ссылку на опубликованную Google Таблицу для автоматической загрузки вопросов.',
+        '– После успешного импорта ссылка сохранится, и появится кнопка «🔄 Обновить квиз».',
+        '– Формат ячеек: Вопрос, НомерПравильногоОтвета, Вариант1, Вариант2...',
+        '– Если квиз пуст, используйте кнопку «🧪 Загрузить демо‑вопросы».',
+        '',
+        '🌐 Исходный код: https://github.com/vdistortion/doubletardigrade-bot',
       ].join('\n');
-      return context.send(helpText, {
-        keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
-      });
+      return context.send(helpText);
     }
 
-    // Обработка кнопки "Режим: Выключен/Включен"
+    // Режим работы бота
     if (payload?.action === 'bot_mode_toggle_menu') {
       return context.send(`${BOT_ICON} Управление режимом бота:`, {
         keyboard: getBotModeToggleKeyboard(enable_messages, enable_chats),
       });
     }
 
-    // Обработка кнопки "Включить/Выключить для сообщений"
+    // Переключение режима для сообщений
     if (payload?.action === 'toggle_mode_messages') {
       await setBotSetting('enable_messages', !enable_messages);
       const updatedSettings = await getBotSettings();
       return context.send(
         `✅ Режим для сообщений ${updatedSettings.enable_messages ? 'включен' : 'выключен'}.`,
-        {
-          keyboard: getAdminMenu(
-            questions.length > 0,
-            updatedSettings.enable_messages,
-            updatedSettings.enable_chats,
-          ),
-        },
       );
     }
 
-    // Обработка кнопки "Включить/Выключить для чатов"
+    // Переключение режима для чатов
     if (payload?.action === 'toggle_mode_chats') {
       await setBotSetting('enable_chats', !enable_chats);
       const updatedSettings = await getBotSettings();
       return context.send(
         `✅ Режим для чатов ${updatedSettings.enable_chats ? 'включен' : 'выключен'}.`,
-        {
-          keyboard: getAdminMenu(
-            questions.length > 0,
-            updatedSettings.enable_messages,
-            updatedSettings.enable_chats,
-          ),
-        },
       );
     }
 
-    // Обработка кнопки "Инициализировать квиз"
-    if (payload?.action === 'quiz_init') {
-      const tests = [
-        [
-          'Кто такие тихоходки?',
-          '1',
-          'Микроскопические животные',
-          'Вид рыб',
-          'Пришельцы',
-          'Насекомые',
-        ],
-        ['Сколько ног у тихоходки?', '3', 'Две', 'Шесть', 'Восемь', 'Десять'],
-        [
-          'Где НЕ могут выжить тихоходки?',
-          '4',
-          'В открытом космосе',
-          'При радиации',
-          'В жидком кислороде',
-          'В жерле вулкана',
-        ],
-        [
-          'Как еще называют тихоходок?',
-          '2',
-          'Водные слоны',
-          'Водные медведи',
-          'Моховые поросята',
-          'Морские львы',
-        ],
-      ];
-      for (const t of tests) {
-        await addQuizQuestion(t[0], t.slice(2), parseInt(t[1]));
-      }
-      return context.send('✅ База инициализирована (4 вопроса).', {
-        keyboard: getAdminMenu(true, enable_messages, enable_chats),
-      });
-    }
-
-    // Обработка кнопки "Удалить все вопросы"
-    if (payload?.action === 'quiz_clear') {
-      await deleteAllQuestions();
-      return context.send('✅ Все вопросы удалены.', {
-        keyboard: getAdminMenu(false, enable_messages, enable_chats),
-      });
-    }
-
-    // Обработка кнопки "Синхронизация"
+    // Синхронизация альбома
     if (payload?.action === 'sync_album') {
+      if (!currentAlbumId) {
+        return context.send('❌ Альбом не задан. Отправьте ссылку на альбом.');
+      }
       try {
         const count = await syncAlbum(GROUP_ID, currentAlbumId, userApi);
+        // Обновляем меню после синхронизации
+        const [updatedTardigrades, updatedQuestions] = await Promise.all([
+          getTardigrades(),
+          getQuestions(),
+        ]);
+        const updatedMainMenuKeyboard = getMainMenu(
+          true,
+          updatedTardigrades.length > 0,
+          updatedQuestions.length > 0,
+          false,
+          false,
+        );
         return context.send(`✅ Синхронизация завершена! Объектов: ${count}`, {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
+          keyboard: updatedMainMenuKeyboard,
         });
       } catch (error: any) {
         console.error('Ошибка при синхронизации альбома:', error);
@@ -190,13 +200,11 @@ updates.on('message_new', async (context: MessageContext) => {
           errorMessage =
             '‼ Не удалось синхронизировать альбом. Убедитесь, что сообщество открыто, и повторите попытку.';
         }
-        return context.send(errorMessage, {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
-        });
+        return context.send(errorMessage);
       }
     }
 
-    // Обработка кнопки "Тест выдачи"
+    // Тест выдачи
     if (payload?.action === 'test_tardigrade') {
       const tardigrades = await getTardigrades(); // Загружаем тихоходок для теста
       if (!tardigrades.length) return context.send('❌ Пусто.');
@@ -204,70 +212,129 @@ updates.on('message_new', async (context: MessageContext) => {
       return context.send(`🧪 Тест:\n\n${rand.text}`, { attachment: rand.image || undefined });
     }
 
-    // Обработка команды /album [ID]
-    if (command.startsWith('/album ')) {
-      const newAlbumId = parseInt(command.split(' ')[1]);
-      if (!isNaN(newAlbumId) && newAlbumId > 0) {
-        currentAlbumId = newAlbumId;
-        // Можно добавить сохранение currentAlbumId в Supabase для персистентности
-        return context.send(`✅ ID альбома изменен на ${newAlbumId}.`, {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
-        });
-      } else {
-        return context.send('❌ Неверный ID альбома.', {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
-        });
-      }
-    }
-
-    // Обработка команды /quiz_add Вопрос|НомерПравильного|Вар1|Вар2|...
-    if (command.startsWith('/quiz_add ')) {
-      const parts = rawText.substring('/quiz_add '.length).split('|');
-      if (parts.length >= 4) {
-        const questionText = parts[0];
-        const correctOptionIndex = parseInt(parts[1]);
-        const options = parts.slice(2);
-        if (
-          !isNaN(correctOptionIndex) &&
-          correctOptionIndex > 0 &&
-          correctOptionIndex <= options.length
-        ) {
-          await addQuizQuestion(questionText, options, correctOptionIndex);
-          return context.send('✅ Вопрос добавлен.', {
-            keyboard: getAdminMenu(true, enable_messages, enable_chats),
+    // Обработка ссылки на альбом VK (автосинхронизация)
+    const albumRegex = /album-(\d+)_(\d+)/;
+    const albumMatch = rawText.match(albumRegex);
+    if (albumMatch) {
+      const ownerId = parseInt(albumMatch[1], 10);
+      const albumId = parseInt(albumMatch[2], 10);
+      if (Math.abs(ownerId) === GROUP_ID) {
+        currentAlbumId = albumId;
+        try {
+          await setAlbumId(albumId);
+          // Автоматическая синхронизация
+          const count = await syncAlbum(GROUP_ID, albumId, userApi);
+          const [updatedTardigrades, updatedQuestions] = await Promise.all([
+            getTardigrades(),
+            getQuestions(),
+          ]);
+          const updatedMainMenuKeyboard = getMainMenu(
+            true,
+            updatedTardigrades.length > 0,
+            updatedQuestions.length > 0,
+            false,
+            false,
+          );
+          return context.send(`✅ Альбом обновлён и синхронизирован. Объектов: ${count}`, {
+            keyboard: updatedMainMenuKeyboard,
           });
+        } catch (e: any) {
+          // Альбом сохранён, но синхронизация провалилась
+          return context.send(`❌ Альбом сохранён, но синхронизация не удалась: ${e.message}`);
         }
+      } else {
+        return context.send('❌ Альбом не принадлежит этому сообществу.');
       }
-      return context.send(
-        '❌ Неверный формат команды. Используйте: /quiz_add Вопрос|НомерПравильного|Вар1|Вар2|...',
-        {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
-        },
-      );
     }
 
-    // Обработка команды /quiz_del [ID]
-    if (command.startsWith('/quiz_del ')) {
-      const qId = parseInt(command.split(' ')[1]);
-      if (!isNaN(qId) && qId > 0) {
-        await deleteQuestion(qId);
-        return context.send(`✅ Вопрос ${qId} удален.`, {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
+    // Загрузка демо-вопросов
+    if (payload?.action === 'load_demo_questions') {
+      try {
+        const filePath = join(process.cwd(), 'demo_questions.csv');
+        const csvText = await readFile(filePath, { encoding: 'utf-8' });
+        const count = await importQuestionsFromCsv(csvText);
+        const [updatedTardigrades, updatedQuestions] = await Promise.all([
+          getTardigrades(),
+          getQuestions(),
+        ]);
+        const updatedMainMenuKeyboard = getMainMenu(
+          true,
+          updatedTardigrades.length > 0,
+          updatedQuestions.length > 0,
+          false,
+          false,
+        );
+        return context.send(`✅ Загружено ${count} демо‑вопросов.`, {
+          keyboard: updatedMainMenuKeyboard,
         });
-      } else {
-        return context.send('❌ Неверный ID вопроса.', {
-          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats),
+      } catch (e: any) {
+        return context.send(`❌ Ошибка загрузки демо: ${e.message}`);
+      }
+    }
+
+    // Обновление квиза из сохранённой ссылки
+    if (payload?.action === 'refresh_quiz') {
+      const url = await getQuizCsvUrl();
+      if (!url) return context.send('❌ Нет сохранённой ссылки.');
+      try {
+        const csvText = await fetchGoogleSheetCsv(url);
+        const count = await importQuestionsFromCsv(csvText);
+        const [updatedTardigrades, updatedQuestions] = await Promise.all([
+          getTardigrades(),
+          getQuestions(),
+        ]);
+        const updatedMainMenuKeyboard = getMainMenu(
+          true,
+          updatedTardigrades.length > 0,
+          updatedQuestions.length > 0,
+          false,
+          false,
+        );
+        return context.send(`✅ Квиз обновлён из таблицы. Загружено ${count} вопросов.`, {
+          keyboard: updatedMainMenuKeyboard,
         });
+      } catch (e: any) {
+        return context.send(`❌ Не удалось обновить квиз: ${e.message}`);
+      }
+    }
+
+    // Импорт вопросов по ссылке на Google Таблицу
+    const urlRegex = /https?:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
+    const match = rawText.match(urlRegex);
+    if (match) {
+      const url = match[0];
+      try {
+        const csvText = await fetchGoogleSheetCsv(url);
+        const count = await importQuestionsFromCsv(csvText);
+        await setQuizCsvUrl(url);
+        const [updatedTardigrades, updatedQuestions] = await Promise.all([
+          getTardigrades(),
+          getQuestions(),
+        ]);
+        const updatedMainMenuKeyboard = getMainMenu(
+          true,
+          updatedTardigrades.length > 0,
+          updatedQuestions.length > 0,
+          false,
+          false,
+        );
+        return context.send(
+          `✅ Импортировано ${count} вопросов из Google Таблицы. Ссылка сохранена для автообновления.`,
+          {
+            keyboard: updatedMainMenuKeyboard,
+          },
+        );
+      } catch (e: any) {
+        return context.send(`❌ Не удалось загрузить таблицу: ${e.message}`);
       }
     }
   }
 
-  // --- Общая логика бота (работает только если бот включен для текущего контекста) ---
+  // ─── Проверка доступности бота для текущего контекста ──────────────────
   const isEnabledForCurrentContext = (enable_messages && !inChat) || (enable_chats && inChat);
 
   if (!isEnabledForCurrentContext) {
-    // Если бот выключен для текущего контекста (и это не админское действие, которое уже обработано),
-    // то просто игнорируем сообщение.
+    // Выключен для всех, кроме админа в ЛС (его уже обслужили выше)
     return;
   }
 
@@ -276,27 +343,40 @@ updates.on('message_new', async (context: MessageContext) => {
   // 2. ЛИБО это не админ, и бот включен для текущего контекста.
 
   try {
-    // Загружаем данные, необходимые для общих операций бота
+    // ─── Загрузка данных ────────────────────────────────────────────────────
     const [tardigrades, questions, stats] = await Promise.all([
       getTardigrades(),
       getQuestions(),
       getQuizStats(String(userId)),
     ]);
 
-    const keyboard = getMainMenu(
-      isAdmin && !inChat,
-      tardigrades.length > 0,
-      questions.length > 0,
-      stats.answered > 0 && stats.answered < stats.total,
-      isEnabledForCurrentContext,
-    );
+    const hasTardigrades = tardigrades.length > 0;
+    const hasQuestions = questions.length > 0;
+    const hasContent = hasTardigrades || hasQuestions;
 
-    // Обработка команды /start или кнопки "Назад"
-    if (command === '/start' || payload?.action === 'back') {
-      return context.send(`${BOT_ICON} Главное меню:`, { keyboard });
+    // Если контента нет и это не админ в ЛС (админ уже получил бы админ-панель выше) – молчим
+    if (!hasContent) {
+      // Админ в ЛС без контента при /start или admin_menu уже обслужен в блоке выше,
+      // поэтому сюда попадают только обычные пользователи (или админ в чате) – игнорируем
+      return;
     }
 
-    // Обработка кнопки "Тихоходка дня"
+    // ─── Главное меню (для всех, у кого есть контент) ──────────────────────
+    const isQuizInProgress = stats.answered > 0 && stats.answered < stats.total;
+    const mainMenuKeyboard = getMainMenu(
+      isAdmin && !inChat, // показывать шестерёнку только админу в ЛС
+      hasTardigrades,
+      hasQuestions,
+      isQuizInProgress,
+      inChat,
+    );
+
+    // /start или кнопка "Начать" – показываем главное меню
+    if (command === 'начать' || command === '/start' || payload?.action === 'start') {
+      return context.send(`${BOT_ICON} Главное меню:`, { keyboard: mainMenuKeyboard });
+    }
+
+    // Обработка кнопки «Тихоходка дня»
     if (payload?.action === 'tardigrade_day') {
       const { tardigrade, isNew } = await getTodayTardigrade(String(userId));
       const prefix = isNew
@@ -306,12 +386,12 @@ updates.on('message_new', async (context: MessageContext) => {
         `${BOT_ICON} ${prefix}\n\n✨ ${tardigrade.text}\n\n🔬 ${tardigrade.description || ''}`,
         {
           attachment: tardigrade.image || undefined,
-          keyboard,
+          keyboard: mainMenuKeyboard,
         },
       );
     }
 
-    // Обработка кнопки "Квиз" / "Продолжить квиз"
+    // Обработка кнопки «Квиз» / «Продолжить квиз»
     if (payload?.action === 'quiz') {
       const question = await getUnansweredQuestion(String(userId));
       if (!question) {
@@ -322,20 +402,7 @@ updates.on('message_new', async (context: MessageContext) => {
         else resultMsg += 'Хороший результат!';
         return context.send(resultMsg, { keyboard: quizRestartKeyboard });
       }
-
-      const qKeyboard = JSON.stringify({
-        inline: true,
-        buttons: question.options.map((opt, idx) => [
-          {
-            action: {
-              type: 'text',
-              label: opt.slice(0, 40),
-              payload: JSON.stringify({ action: 'quiz_ans', qid: question.id, ans: idx + 1 }),
-            },
-            color: 'primary',
-          },
-        ]),
-      });
+      const qKeyboard = generateShuffledQuestionKeyboard(question);
       return context.send(`${BOT_ICON} Вопрос:\n\n❓ ${question.question}`, {
         keyboard: qKeyboard,
       });
@@ -343,28 +410,27 @@ updates.on('message_new', async (context: MessageContext) => {
 
     // Обработка ответа на вопрос квиза
     if (payload?.action === 'quiz_ans') {
-      const { qid, ans } = payload;
+      const { qid, isCorrect } = payload;
       const q = questions.find((item) => item.id === qid);
       if (!q) return context.send('❌ Вопрос не найден.');
 
-      await saveQuizAnswer(String(userId), qid, q.correct === ans);
+      await saveQuizAnswer(String(userId), qid, isCorrect);
       const [updatedTardigrades, updatedQuestions, updatedStats] = await Promise.all([
         getTardigrades(),
         getQuestions(),
         getQuizStats(String(userId)),
       ]);
 
-      const feedbackMessage =
-        q.correct === ans
-          ? '✅ Верно!'
-          : `❌ Неправильно. Правильный ответ: ${q.options[q.correct - 1]}`;
+      const feedbackMessage = isCorrect
+        ? '✅ Верно!'
+        : `❌ Неправильно. Правильный ответ: ${q.options[q.correct - 1]}`;
 
       const updatedMainMenuKeyboard = getMainMenu(
         isAdmin && !inChat,
         updatedTardigrades.length > 0,
         updatedQuestions.length > 0,
         updatedStats.answered > 0 && updatedStats.answered < updatedStats.total,
-        isEnabledForCurrentContext,
+        inChat,
       );
 
       await context.send(feedbackMessage, { keyboard: updatedMainMenuKeyboard });
@@ -378,35 +444,17 @@ updates.on('message_new', async (context: MessageContext) => {
         );
       }
 
-      const nextKeyboard = JSON.stringify({
-        inline: true,
-        buttons: nextQ.options.map((opt, idx) => [
-          {
-            action: {
-              type: 'text',
-              label: opt.slice(0, 40),
-              payload: JSON.stringify({ action: 'quiz_ans', qid: nextQ.id, ans: idx + 1 }),
-            },
-            color: 'primary',
-          },
-        ]),
-      });
+      const nextKeyboard = generateShuffledQuestionKeyboard(nextQ);
       return context.send(`${BOT_ICON} Следующий вопрос:\n\n❓ ${nextQ.question}`, {
         keyboard: nextKeyboard,
       });
     }
 
-    // Обработка кнопки "Пройти заново" (квиз)
+    // Обработка кнопки «Пройти заново»
     if (payload?.action === 'quiz_reset') {
       await resetQuiz(String(userId));
       return context.send(`${BOT_ICON} Прогресс квиза сброшен. Можно начинать заново!`, {
-        keyboard: getMainMenu(
-          isAdmin && !inChat,
-          tardigrades.length > 0,
-          questions.length > 0,
-          false,
-          isEnabledForCurrentContext,
-        ),
+        keyboard: getMainMenu(isAdmin && !inChat, hasTardigrades, hasQuestions, false, inChat),
       });
     }
   } catch (error) {
