@@ -113,6 +113,19 @@ updates.on('message_new', async (context: MessageContext) => {
     const questions = await getQuestions();
     const quizCsvUrl = await getQuizCsvUrl();
 
+    // Вход через /start или "Начать"
+    if (command === 'начать' || command === '/start') {
+      const hasContent = (await getTardigrades()).length > 0 || questions.length > 0;
+      if (hasContent) {
+        const mainMenuKeyboard = getMainMenu(true, true, questions.length > 0, false, false);
+        return context.send(`${BOT_ICON} Главное меню:`, { keyboard: mainMenuKeyboard });
+      } else {
+        return context.send(`${BOT_ICON} Админ-панель:`, {
+          keyboard: getAdminMenu(false, enable_messages, enable_chats, quizCsvUrl),
+        });
+      }
+    }
+
     // Кнопка "⚙️ Админ-панель"
     if (payload?.action === 'admin_menu') {
       return context.send(`${BOT_ICON} Админ-панель:`, {
