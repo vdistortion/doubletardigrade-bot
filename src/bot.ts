@@ -121,7 +121,7 @@ updates.on('message_new', async (context: MessageContext) => {
         return context.send(`${BOT_ICON} Главное меню:`, { keyboard: mainMenuKeyboard });
       } else {
         return context.send(`${BOT_ICON} Админ-панель:`, {
-          keyboard: getAdminMenu(false, enable_messages, enable_chats, quizCsvUrl),
+          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
         });
       }
     }
@@ -428,37 +428,20 @@ updates.on('message_new', async (context: MessageContext) => {
       if (!q) return context.send('❌ Вопрос не найден.');
 
       await saveQuizAnswer(String(userId), qid, isCorrect);
-      const [updatedTardigrades, updatedQuestions, updatedStats] = await Promise.all([
-        getTardigrades(),
-        getQuestions(),
-        getQuizStats(String(userId)),
-      ]);
-
       const feedbackMessage = isCorrect
         ? '✅ Верно!'
         : `❌ Неправильно. Правильный ответ: ${q.options[q.correct - 1]}`;
 
-      const updatedMainMenuKeyboard = getMainMenu(
-        isAdmin && !inChat,
-        updatedTardigrades.length > 0,
-        updatedQuestions.length > 0,
-        updatedStats.answered > 0 && updatedStats.answered < updatedStats.total,
-        inChat,
-      );
-
-      await context.send(feedbackMessage, { keyboard: updatedMainMenuKeyboard });
-
       const nextQ = await getUnansweredQuestion(String(userId));
       if (!nextQ) {
         const finalStats = await getQuizStats(String(userId));
-        return context.send(
-          `${BOT_ICON} Квиз завершен! Результат: ${finalStats.correct} из ${finalStats.total}`,
-          { keyboard: quizRestartKeyboard },
-        );
+        const finalMessage = `${feedbackMessage}\n\n${BOT_ICON} Квиз завершен! Результат: ${finalStats.correct} из ${finalStats.total}`;
+        return context.send(finalMessage, { keyboard: quizRestartKeyboard });
       }
 
       const nextKeyboard = generateShuffledQuestionKeyboard(nextQ);
-      return context.send(`${BOT_ICON} Следующий вопрос:\n\n❓ ${nextQ.question}`, {
+      const combinedMessage = `${feedbackMessage}\n\n${BOT_ICON} Следующий вопрос:\n\n❓ ${nextQ.question}`;
+      return context.send(combinedMessage, {
         keyboard: nextKeyboard,
       });
     }
@@ -466,9 +449,24 @@ updates.on('message_new', async (context: MessageContext) => {
     // Обработка кнопки «Пройти заново»
     if (payload?.action === 'quiz_reset') {
       await resetQuiz(String(userId));
-      return context.send(`${BOT_ICON} Прогресс квиза сброшен. Можно начинать заново!`, {
-        keyboard: getMainMenu(isAdmin && !inChat, hasTardigrades, hasQuestions, false, inChat),
-      });
+      // После сброса, сразу пытаемся получить первый вопрос
+      const firstQuestion = await getUnansweredQuestion(String(userId));
+
+      if (firstQuestion) {
+        const qKeyboard = generateShuffledQuestionKeyboard(firstQuestion);
+        const combinedMessage = `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n❓ ${firstQuestion.question}`;
+        return context.send(combinedMessage, {
+          keyboard: qKeyboard,
+        });
+      } else {
+        // Если вопросов нет даже после сброса (например, база пуста)
+        return context.send(
+          `${BOT_ICON} Прогресс квиза сброшен, но вопросов для нового квиза не найдено.`,
+          {
+            keyboard: getMainMenu(isAdmin && !inChat, hasTardigrades, hasQuestions, false, inChat),
+          },
+        );
+      }
     }
   } catch (error) {
     console.error('Bot error:', error);
