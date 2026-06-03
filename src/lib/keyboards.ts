@@ -224,6 +224,14 @@ export const quizRestartKeyboard = JSON.stringify({
       {
         action: {
           type: 'text',
+          label: '👾 Тихоходка дня',
+          payload: JSON.stringify({ action: 'tardigrade_day' }),
+        },
+        color: 'primary',
+      },
+      {
+        action: {
+          type: 'text',
           label: '🔄 Пройти заново',
           payload: JSON.stringify({ action: 'quiz_reset' }),
         },
