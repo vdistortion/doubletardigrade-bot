@@ -101,7 +101,7 @@ updates.on('message_new', async (context: MessageContext) => {
 
   // Очистка обычной клавиатуры (доступна всем в ЛС, админам в чате)
   if (command === '/clearkeyboard') {
-    if (inChat && !isAdmin) return; // в чате только админ
+    if (inChat) return; // в чате только админ
     return context.send('⌨️ Клавиатура скрыта.', {
       keyboard: JSON.stringify({ buttons: [], one_time: true }),
     });
@@ -140,7 +140,7 @@ updates.on('message_new', async (context: MessageContext) => {
         '',
         'Команды:',
         '/start – открыть главное меню',
-        '/clearkeyboard – убрать обычную клавиатуру бота (в чате доступно только админам).',
+        '/clearkeyboard – убрать обычную клавиатуру бота (только в личных сообщениях).',
         '',
         'Загрузка тихоходок дня:',
         '– Кнопка «🔄 Синхронизация» загружает фото и подписи из указанного альбома ВК в базу тихоходок.',
