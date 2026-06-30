@@ -20,7 +20,7 @@ import {
 } from './lib/db.js';
 import { isUserAdmin } from './lib/admin.js';
 import {
-  generateShuffledQuestionKeyboard,
+  generateQuestionMessageAndKeyboard,
   getAdminMenu,
   getBotModeToggleKeyboard,
   getMainMenu,
@@ -101,7 +101,7 @@ updates.on('message_new', async (context: MessageContext) => {
 
   // Очистка обычной клавиатуры (доступна всем в ЛС, админам в чате)
   if (command === '/clearkeyboard') {
-    if (inChat && !isAdmin) return; // в чате только админ
+    if (inChat) return; // в чате только админ
     return context.send('⌨️ Клавиатура скрыта.', {
       keyboard: JSON.stringify({ buttons: [], one_time: true }),
     });
@@ -115,9 +115,16 @@ updates.on('message_new', async (context: MessageContext) => {
 
     // Вход через /start или "Начать"
     if (command === 'начать' || command === '/start') {
-      const hasContent = (await getTardigrades()).length > 0 || questions.length > 0;
+      const tardigrades = await getTardigrades();
+      const hasContent = tardigrades.length > 0 || questions.length > 0;
       if (hasContent) {
-        const mainMenuKeyboard = getMainMenu(true, true, questions.length > 0, false, false);
+        const mainMenuKeyboard = getMainMenu(
+          true,
+          tardigrades.length > 0,
+          questions.length > 0,
+          false,
+          false,
+        );
         return context.send(`${BOT_ICON} Главное меню:`, { keyboard: mainMenuKeyboard });
       } else {
         return context.send(`${BOT_ICON} Админ-панель:`, {
@@ -140,7 +147,7 @@ updates.on('message_new', async (context: MessageContext) => {
         '',
         'Команды:',
         '/start – открыть главное меню',
-        '/clearkeyboard – убрать обычную клавиатуру бота (в чате доступно только админам).',
+        '/clearkeyboard – убрать обычную клавиатуру бота (только в личных сообщениях).',
         '',
         'Загрузка тихоходок дня:',
         '– Кнопка «🔄 Синхронизация» загружает фото и подписи из указанного альбома ВК в базу тихоходок.',
@@ -415,10 +422,8 @@ updates.on('message_new', async (context: MessageContext) => {
         else resultMsg += 'Хороший результат!';
         return context.send(resultMsg, { keyboard: quizRestartKeyboard });
       }
-      const qKeyboard = generateShuffledQuestionKeyboard(question);
-      return context.send(`${BOT_ICON} Вопрос:\n\n❓ ${question.question}`, {
-        keyboard: qKeyboard,
-      });
+      const { message, keyboard } = generateQuestionMessageAndKeyboard(question);
+      return context.send(message, { keyboard });
     }
 
     // Обработка ответа на вопрос квиза
@@ -428,9 +433,7 @@ updates.on('message_new', async (context: MessageContext) => {
       if (!q) return context.send('❌ Вопрос не найден.');
 
       await saveQuizAnswer(String(userId), qid, isCorrect);
-      const feedbackMessage = isCorrect
-        ? '✅ Верно!'
-        : `❌ Неправильно. Правильный ответ: ${q.options[q.correct - 1]}`;
+      const feedbackMessage = isCorrect ? '✅ Верно!' : '❌ Неправильно.';
 
       const nextQ = await getUnansweredQuestion(String(userId));
       if (!nextQ) {
@@ -439,11 +442,10 @@ updates.on('message_new', async (context: MessageContext) => {
         return context.send(finalMessage, { keyboard: quizRestartKeyboard });
       }
 
-      const nextKeyboard = generateShuffledQuestionKeyboard(nextQ);
-      const combinedMessage = `${feedbackMessage}\n\n${BOT_ICON} Следующий вопрос:\n\n❓ ${nextQ.question}`;
-      return context.send(combinedMessage, {
-        keyboard: nextKeyboard,
-      });
+      const { message: nextMessage, keyboard: nextKeyboard } =
+        generateQuestionMessageAndKeyboard(nextQ);
+      const combinedMessage = `${feedbackMessage}\n\n${nextMessage}`;
+      return context.send(combinedMessage, { keyboard: nextKeyboard });
     }
 
     // Обработка кнопки «Пройти заново»
@@ -453,11 +455,9 @@ updates.on('message_new', async (context: MessageContext) => {
       const firstQuestion = await getUnansweredQuestion(String(userId));
 
       if (firstQuestion) {
-        const qKeyboard = generateShuffledQuestionKeyboard(firstQuestion);
-        const combinedMessage = `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n❓ ${firstQuestion.question}`;
-        return context.send(combinedMessage, {
-          keyboard: qKeyboard,
-        });
+        const { message, keyboard } = generateQuestionMessageAndKeyboard(firstQuestion);
+        const combinedMessage = `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n${message}`;
+        return context.send(combinedMessage, { keyboard });
       } else {
         // Если вопросов нет даже после сброса (например, база пуста)
         return context.send(
