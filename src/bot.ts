@@ -115,9 +115,16 @@ updates.on('message_new', async (context: MessageContext) => {
 
     // Вход через /start или "Начать"
     if (command === 'начать' || command === '/start') {
-      const hasContent = (await getTardigrades()).length > 0 || questions.length > 0;
+      const tardigrades = await getTardigrades();
+      const hasContent = tardigrades.length > 0 || questions.length > 0;
       if (hasContent) {
-        const mainMenuKeyboard = getMainMenu(true, true, questions.length > 0, false, false);
+        const mainMenuKeyboard = getMainMenu(
+          true,
+          tardigrades.length > 0,
+          questions.length > 0,
+          false,
+          false,
+        );
         return context.send(`${BOT_ICON} Главное меню:`, { keyboard: mainMenuKeyboard });
       } else {
         return context.send(`${BOT_ICON} Админ-панель:`, {
