@@ -433,9 +433,7 @@ updates.on('message_new', async (context: MessageContext) => {
       if (!q) return context.send('❌ Вопрос не найден.');
 
       await saveQuizAnswer(String(userId), qid, isCorrect);
-      const feedbackMessage = isCorrect
-        ? '✅ Верно!'
-        : `❌ Неправильно. Правильный ответ: ${q.options[q.correct - 1]}`;
+      const feedbackMessage = isCorrect ? '✅ Верно!' : '❌ Неправильно.';
 
       const nextQ = await getUnansweredQuestion(String(userId));
       if (!nextQ) {
