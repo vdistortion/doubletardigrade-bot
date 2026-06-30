@@ -20,7 +20,7 @@ import {
 } from './lib/db.js';
 import { isUserAdmin } from './lib/admin.js';
 import {
-  generateShuffledQuestionKeyboard,
+  generateQuestionMessageAndKeyboard,
   getAdminMenu,
   getBotModeToggleKeyboard,
   getMainMenu,
@@ -422,10 +422,8 @@ updates.on('message_new', async (context: MessageContext) => {
         else resultMsg += 'Хороший результат!';
         return context.send(resultMsg, { keyboard: quizRestartKeyboard });
       }
-      const qKeyboard = generateShuffledQuestionKeyboard(question);
-      return context.send(`${BOT_ICON} Вопрос:\n\n❓ ${question.question}`, {
-        keyboard: qKeyboard,
-      });
+      const { message, keyboard } = generateQuestionMessageAndKeyboard(question);
+      return context.send(message, { keyboard });
     }
 
     // Обработка ответа на вопрос квиза
@@ -446,11 +444,10 @@ updates.on('message_new', async (context: MessageContext) => {
         return context.send(finalMessage, { keyboard: quizRestartKeyboard });
       }
 
-      const nextKeyboard = generateShuffledQuestionKeyboard(nextQ);
-      const combinedMessage = `${feedbackMessage}\n\n${BOT_ICON} Следующий вопрос:\n\n❓ ${nextQ.question}`;
-      return context.send(combinedMessage, {
-        keyboard: nextKeyboard,
-      });
+      const { message: nextMessage, keyboard: nextKeyboard } =
+        generateQuestionMessageAndKeyboard(nextQ);
+      const combinedMessage = `${feedbackMessage}\n\n${nextMessage}`;
+      return context.send(combinedMessage, { keyboard: nextKeyboard });
     }
 
     // Обработка кнопки «Пройти заново»
@@ -460,11 +457,9 @@ updates.on('message_new', async (context: MessageContext) => {
       const firstQuestion = await getUnansweredQuestion(String(userId));
 
       if (firstQuestion) {
-        const qKeyboard = generateShuffledQuestionKeyboard(firstQuestion);
-        const combinedMessage = `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n❓ ${firstQuestion.question}`;
-        return context.send(combinedMessage, {
-          keyboard: qKeyboard,
-        });
+        const { message, keyboard } = generateQuestionMessageAndKeyboard(firstQuestion);
+        const combinedMessage = `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n${message}`;
+        return context.send(combinedMessage, { keyboard });
       } else {
         // Если вопросов нет даже после сброса (например, база пуста)
         return context.send(
