@@ -1,4 +1,4 @@
 import { updates } from './bot.js';
 
-await updates.startPolling();
+await updates.start();
 console.log('🤖 Bot started');
