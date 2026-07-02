@@ -11,7 +11,9 @@ function getPool(): Pool {
 
 // Синглтон пула — не создаём новый на каждый запрос
 let pool: Pool | null = null;
-function db(): Pool {
+
+// Экспортируем для прямых запросов извне (например, проверка answered)
+export function db(): Pool {
   if (!pool) pool = getPool();
   return pool;
 }
@@ -236,6 +238,15 @@ export async function saveQuizAnswer(
   );
 }
 
+// Проверка, отвечал ли уже пользователь на данный вопрос
+export async function isQuestionAnswered(userId: string, questionId: number): Promise<boolean> {
+  const { rowCount } = await db().query<{ is_correct: boolean }>(
+    'SELECT 1 FROM quiz_answers WHERE user_id = $1 AND question_id = $2',
+    [userId, questionId],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
 export async function getQuizStats(userId: string) {
   const { rows: answers } = await db().query<{ is_correct: boolean }>(
     'SELECT is_correct FROM quiz_answers WHERE user_id = $1',
@@ -254,6 +265,39 @@ export async function getQuizStats(userId: string) {
 
 export async function resetQuiz(userId: string): Promise<void> {
   await db().query('DELETE FROM quiz_answers WHERE user_id = $1', [userId]);
+}
+
+// ─── Сессии квиза (для инлайн-редактирования) ───────────────────────────────
+
+export async function upsertQuizSession(
+  userId: string,
+  peerId: string,
+  messageId: number,
+): Promise<void> {
+  await db().query(
+    `INSERT INTO quiz_sessions (user_id, peer_id, message_id)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (user_id, peer_id) DO UPDATE SET message_id = EXCLUDED.message_id`,
+    [userId, peerId, messageId],
+  );
+}
+
+export async function getQuizSession(
+  userId: string,
+  peerId: string,
+): Promise<{ message_id: number } | null> {
+  const { rows } = await db().query<{ message_id: number }>(
+    'SELECT message_id FROM quiz_sessions WHERE user_id = $1 AND peer_id = $2',
+    [userId, peerId],
+  );
+  return rows[0] || null;
+}
+
+export async function deleteQuizSession(userId: string, peerId: string): Promise<void> {
+  await db().query('DELETE FROM quiz_sessions WHERE user_id = $1 AND peer_id = $2', [
+    userId,
+    peerId,
+  ]);
 }
 
 // ─── Настройки бота ────────────────────────────────────────────────────────────

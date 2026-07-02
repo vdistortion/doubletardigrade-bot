@@ -17,6 +17,10 @@ import {
   setBotSetting,
   getAlbumId,
   setAlbumId,
+  upsertQuizSession,
+  getQuizSession,
+  deleteQuizSession,
+  isQuestionAnswered,
 } from './lib/db.js';
 import { isUserAdmin } from './lib/admin.js';
 import {
@@ -101,7 +105,7 @@ updates.on('message_new', async (context: MessageContext) => {
 
   // Очистка обычной клавиатуры (доступна всем в ЛС, админам в чате)
   if (command === '/clearkeyboard') {
-    if (inChat) return; // в чате только админ
+    if (inChat) return; // в чате инлайн кнопки
     return context.send('⌨️ Клавиатура скрыта.', {
       keyboard: JSON.stringify({ buttons: [], one_time: true }),
     });
@@ -340,9 +344,7 @@ updates.on('message_new', async (context: MessageContext) => {
         );
         return context.send(
           `✅ Импортировано ${count} вопросов из Google Таблицы. Ссылка сохранена для автообновления.`,
-          {
-            keyboard: updatedMainMenuKeyboard,
-          },
+          { keyboard: updatedMainMenuKeyboard },
         );
       } catch (e: any) {
         return context.send(`❌ Не удалось загрузить таблицу: ${e.message}`);
@@ -413,7 +415,23 @@ updates.on('message_new', async (context: MessageContext) => {
 
     // Обработка кнопки «Квиз» / «Продолжить квиз»
     if (payload?.action === 'quiz') {
-      const question = await getUnansweredQuestion(String(userId));
+      const peerId = String(context.peerId);
+      const userIdStr = String(userId);
+
+      // Удаляем предыдущую сессию в этом чате/ЛС (если есть)
+      const oldSession = await getQuizSession(userIdStr, peerId);
+      if (oldSession) {
+        try {
+          await api.messages.delete({
+            message_ids: [oldSession.message_id],
+            delete_for_all: 1,
+          });
+        } catch (e) {
+          // игнорируем ошибку удаления
+        }
+      }
+
+      const question = await getUnansweredQuestion(userIdStr);
       if (!question) {
         let resultMsg = `${BOT_ICON} Все доступные вопросы пройдены!\n📈 Результат: ${stats.correct} из ${stats.total}\n\n`;
         if (stats.percent === 100) resultMsg += '🏆 Невероятно! Это абсолютный успех!';
@@ -423,41 +441,120 @@ updates.on('message_new', async (context: MessageContext) => {
         return context.send(resultMsg, { keyboard: quizRestartKeyboard });
       }
       const { message, keyboard } = generateQuestionMessageAndKeyboard(question);
-      return context.send(message, { keyboard });
+      const sent = await context.send(message, { keyboard });
+      // sent может быть объектом с message_id или массивом (в vk-io обычно одно сообщение)
+      const messageId = Array.isArray(sent) ? sent[0]?.message_id : sent?.message_id;
+      if (messageId) {
+        await upsertQuizSession(userIdStr, peerId, messageId);
+      }
+      return;
     }
 
     // Обработка ответа на вопрос квиза
     if (payload?.action === 'quiz_ans') {
-      const { qid, isCorrect } = payload;
-      const q = questions.find((item) => item.id === qid);
-      if (!q) return context.send('❌ Вопрос не найден.');
+      const peerId = String(context.peerId);
+      const senderStr = String(context.senderId);
 
-      await saveQuizAnswer(String(userId), qid, isCorrect);
-      const feedbackMessage = isCorrect ? '✅ Верно!' : '❌ Неправильно.';
+      // Получаем сессию для данного пользователя и чата
+      const session = await getQuizSession(senderStr, peerId);
 
-      const nextQ = await getUnansweredQuestion(String(userId));
-      if (!nextQ) {
-        const finalStats = await getQuizStats(String(userId));
-        const finalMessage = `${feedbackMessage}\n\n${BOT_ICON} Квиз завершен! Результат: ${finalStats.correct} из ${finalStats.total}`;
-        return context.send(finalMessage, { keyboard: quizRestartKeyboard });
+      // Если сессии нет
+      if (!session) {
+        // Отправляем личное сообщение нажавшему
+        try {
+          await api.messages.send({
+            user_id: context.senderId,
+            random_id: 0,
+            message: `Этот вопрос не для вас. Чтобы начать свой квиз, напишите боту "Квиз".`,
+          });
+        } catch (e) {
+          // не удалось отправить ЛС — игнорируем
+        }
+        return;
       }
 
-      const { message: nextMessage, keyboard: nextKeyboard } =
-        generateQuestionMessageAndKeyboard(nextQ);
-      const combinedMessage = `${feedbackMessage}\n\n${nextMessage}`;
-      return context.send(combinedMessage, { keyboard: nextKeyboard });
+      const { qid, isCorrect } = payload;
+      const question = questions.find((item) => item.id === qid);
+      if (!question) return;
+
+      // Защита от повторного ответа
+      if (await isQuestionAnswered(senderStr, qid)) {
+        return; // молча игнорируем
+      }
+
+      await saveQuizAnswer(senderStr, qid, isCorrect);
+      const feedbackMessage = isCorrect ? '✅ Верно!' : '❌ Неправильно.';
+
+      const nextQ = await getUnansweredQuestion(senderStr);
+      const messageId = session.message_id;
+
+      if (nextQ) {
+        const { message: nextMessage, keyboard: nextKeyboard } =
+          generateQuestionMessageAndKeyboard(nextQ);
+        const combinedMessage = `${feedbackMessage}\n\n${nextMessage}`;
+        try {
+          await api.messages.edit({
+            peer_id: context.peerId,
+            message_id: messageId,
+            message: combinedMessage,
+            keyboard: nextKeyboard,
+          });
+          // сессия остаётся (message_id не меняется)
+        } catch (e) {
+          // если редактирование не удалось (сообщение удалено), отправляем новое
+          const sent = await context.send(combinedMessage, { keyboard: nextKeyboard });
+          const newMessageId = Array.isArray(sent) ? sent[0]?.message_id : sent?.message_id;
+          if (newMessageId) {
+            await upsertQuizSession(senderStr, peerId, newMessageId);
+          }
+        }
+      } else {
+        // Квиз завершён
+        const finalStats = await getQuizStats(senderStr);
+        const finalMessage = `${feedbackMessage}\n\n${BOT_ICON} Квиз завершен! Результат: ${finalStats.correct} из ${finalStats.total}`;
+        try {
+          await api.messages.edit({
+            peer_id: context.peerId,
+            message_id: messageId,
+            message: finalMessage,
+            keyboard: quizRestartKeyboard, // или можно убрать клавиатуру совсем, оставил кнопку рестарта
+          });
+        } catch (e) {
+          await context.send(finalMessage, { keyboard: quizRestartKeyboard });
+        }
+        await deleteQuizSession(senderStr, peerId);
+      }
+      return;
     }
 
     // Обработка кнопки «Пройти заново»
     if (payload?.action === 'quiz_reset') {
-      await resetQuiz(String(userId));
+      const peerId = String(context.peerId);
       // После сброса, сразу пытаемся получить первый вопрос
-      const firstQuestion = await getUnansweredQuestion(String(userId));
+      const userIdStr = String(userId);
 
+      // Удалим старую сессию, если была
+      const oldSession = await getQuizSession(userIdStr, peerId);
+      if (oldSession) {
+        try {
+          await api.messages.delete({
+            message_ids: [oldSession.message_id],
+            delete_for_all: 1,
+          });
+        } catch (e) {}
+        await deleteQuizSession(userIdStr, peerId);
+      }
+
+      await resetQuiz(userIdStr);
+      const firstQuestion = await getUnansweredQuestion(userIdStr);
       if (firstQuestion) {
         const { message, keyboard } = generateQuestionMessageAndKeyboard(firstQuestion);
         const combinedMessage = `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n${message}`;
-        return context.send(combinedMessage, { keyboard });
+        const sent = await context.send(combinedMessage, { keyboard });
+        const messageId = Array.isArray(sent) ? sent[0]?.message_id : sent?.message_id;
+        if (messageId) {
+          await upsertQuizSession(userIdStr, peerId, messageId);
+        }
       } else {
         // Если вопросов нет даже после сброса (например, база пуста)
         return context.send(
@@ -467,6 +564,7 @@ updates.on('message_new', async (context: MessageContext) => {
           },
         );
       }
+      return;
     }
   } catch (error) {
     console.error('Bot error:', error);
