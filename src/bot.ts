@@ -442,11 +442,7 @@ updates.on('message_new', async (context: MessageContext) => {
       }
       const { message, keyboard } = generateQuestionMessageAndKeyboard(question);
       const sent = await context.send(message, { keyboard });
-      // sent может быть объектом с message_id или массивом (в vk-io обычно одно сообщение)
-      const messageId = Array.isArray(sent) ? sent[0]?.message_id : sent?.message_id;
-      if (messageId) {
-        await upsertQuizSession(userIdStr, peerId, messageId);
-      }
+      await upsertQuizSession(userIdStr, peerId, sent.id);
       return;
     }
 
@@ -503,10 +499,7 @@ updates.on('message_new', async (context: MessageContext) => {
         } catch (e) {
           // если редактирование не удалось (сообщение удалено), отправляем новое
           const sent = await context.send(combinedMessage, { keyboard: nextKeyboard });
-          const newMessageId = Array.isArray(sent) ? sent[0]?.message_id : sent?.message_id;
-          if (newMessageId) {
-            await upsertQuizSession(senderStr, peerId, newMessageId);
-          }
+          await upsertQuizSession(senderStr, peerId, sent.id);
         }
       } else {
         // Квиз завершён
@@ -551,10 +544,7 @@ updates.on('message_new', async (context: MessageContext) => {
         const { message, keyboard } = generateQuestionMessageAndKeyboard(firstQuestion);
         const combinedMessage = `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n${message}`;
         const sent = await context.send(combinedMessage, { keyboard });
-        const messageId = Array.isArray(sent) ? sent[0]?.message_id : sent?.message_id;
-        if (messageId) {
-          await upsertQuizSession(userIdStr, peerId, messageId);
-        }
+        await upsertQuizSession(userIdStr, peerId, sent.id);
       } else {
         // Если вопросов нет даже после сброса (например, база пуста)
         return context.send(
