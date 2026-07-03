@@ -26,7 +26,7 @@ export function generateQuestionMessageAndKeyboard(question: QuizQuestion): {
 
     flatButtons.push({
       action: {
-        type: 'text',
+        type: 'callback',
         label: digit,
         payload: JSON.stringify({
           action: 'quiz_ans',
