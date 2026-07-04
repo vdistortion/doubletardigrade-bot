@@ -28,6 +28,13 @@ CREATE TABLE IF NOT EXISTS quiz_answers (
     UNIQUE(user_id, question_id)
 );
 
+CREATE TABLE IF NOT EXISTS quiz_sessions (
+    user_id TEXT NOT NULL,
+    peer_id TEXT NOT NULL,
+    message_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, peer_id)
+);
+
 CREATE TABLE IF NOT EXISTS bot_settings (
     key TEXT PRIMARY KEY,
     value TEXT

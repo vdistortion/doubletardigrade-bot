@@ -3,18 +3,18 @@
   "version": "2.0.0",
   "type": "module",
   "scripts": {
-    "docker:dev:up": "docker compose -f docker-compose.dev.yml up -d",
-    "docker:dev:down": "docker compose -f docker-compose.dev.yml down",
-    "docker:dev:clean": "docker compose -f docker-compose.dev.yml down -v --rmi all",
-    "docker:main:up": "docker compose -f docker-compose.main.yml up -d --build",
-    "docker:main:down": "docker compose -f docker-compose.main.yml down",
-    "docker:main:clean": "docker compose -f docker-compose.main.yml down -v --rmi all",
-    "docker:release:up": "docker compose -f docker-compose.release.yml up -d --build",
-    "docker:release:down": "docker compose -f docker-compose.release.yml down",
-    "docker:release:clean": "docker compose -f docker-compose.release.yml down -v --rmi all",
+    "docker:dev:up": "docker compose up -d",
+    "docker:dev:down": "docker compose down",
+    "docker:dev:clean": "docker compose down -v --rmi all",
+    "docker:main:up": "docker compose -f compose.main.yaml up -d --build",
+    "docker:main:down": "docker compose -f compose.main.yaml down",
+    "docker:main:clean": "docker compose -f compose.main.yaml down -v --rmi all",
+    "docker:release:up": "docker compose -f compose.release.yaml up -d --build",
+    "docker:release:down": "docker compose -f compose.release.yaml down",
+    "docker:release:clean": "docker compose -f compose.release.yaml down -v --rmi all",
     "prepare": "cp -n .env.example .env.dev",
     "build": "rm -rf dist && tsc",
-    "format": "prettier . --write '!data'",
+    "format": "prettier . --write",
     "start": "tsx watch api/dev-server.ts"
   },
   "prettier": {
@@ -23,14 +23,14 @@
   },
   "dependencies": {
     "dotenv": "^17.4.2",
-    "pg": "^8.20.0",
+    "pg": "^8.22.0",
     "vk-io": "^4.10.1"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0",
+    "@types/node": "^26.1.0",
     "@types/pg": "^8.20.0",
-    "prettier": "3.8.3",
-    "tsx": "^4.21.0",
+    "prettier": "^3.9.4",
+    "tsx": "^4.22.5",
     "typescript": "^6.0.3"
   }
 }

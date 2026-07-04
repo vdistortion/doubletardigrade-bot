@@ -1,34 +1,52 @@
 import type { QuizQuestion } from './db.js';
 
-export function generateShuffledQuestionKeyboard(question: QuizQuestion): string {
+const digitEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+
+export function generateQuestionMessageAndKeyboard(question: QuizQuestion): {
+  message: string;
+  keyboard: string;
+} {
   const optionsWithFlag = question.options.map((text, idx) => ({
     text,
     isCorrect: idx === question.correct - 1, // correct — номер от 1
   }));
 
-  // Алгоритм Фишера-Йетса
+  // Перемешивание Фишера-Йетса
   for (let i = optionsWithFlag.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [optionsWithFlag[i], optionsWithFlag[j]] = [optionsWithFlag[j], optionsWithFlag[i]];
   }
 
-  return JSON.stringify({
-    inline: true,
-    buttons: optionsWithFlag.map((opt) => [
-      {
-        action: {
-          type: 'text',
-          label: opt.text.slice(0, 40),
-          payload: JSON.stringify({
-            action: 'quiz_ans',
-            qid: question.id,
-            isCorrect: opt.isCorrect,
-          }),
-        },
-        color: 'primary',
+  let optionsText = '';
+  const flatButtons: any[] = [];
+  for (let i = 0; i < optionsWithFlag.length; i++) {
+    const opt = optionsWithFlag[i];
+    const digit = i < digitEmojis.length ? digitEmojis[i] : `${i + 1}`;
+    optionsText += `${digit} ${opt.text}\n`;
+
+    flatButtons.push({
+      action: {
+        type: 'callback',
+        label: digit,
+        payload: JSON.stringify({
+          action: 'quiz_ans',
+          qid: question.id,
+          isCorrect: opt.isCorrect,
+        }),
       },
-    ]),
-  });
+      color: 'primary',
+    });
+  }
+
+  // Группируем по 4 кнопки в ряд
+  const buttonRows: any[] = [];
+  for (let i = 0; i < flatButtons.length; i += 4) {
+    buttonRows.push(flatButtons.slice(i, i + 4));
+  }
+
+  const message = `❓ ${question.question}\n\n${optionsText.trim()}`;
+  const keyboard = JSON.stringify({ inline: true, buttons: buttonRows });
+  return { message, keyboard };
 }
 
 /**
@@ -221,6 +239,14 @@ export const quizRestartKeyboard = JSON.stringify({
   inline: true,
   buttons: [
     [
+      {
+        action: {
+          type: 'text',
+          label: '👾 Тихоходка дня',
+          payload: JSON.stringify({ action: 'tardigrade_day' }),
+        },
+        color: 'primary',
+      },
       {
         action: {
           type: 'text',

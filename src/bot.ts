@@ -17,10 +17,14 @@ import {
   setBotSetting,
   getAlbumId,
   setAlbumId,
+  upsertQuizSession,
+  getQuizSession,
+  deleteQuizSession,
+  isQuestionAnswered,
 } from './lib/db.js';
 import { isUserAdmin } from './lib/admin.js';
 import {
-  generateShuffledQuestionKeyboard,
+  generateQuestionMessageAndKeyboard,
   getAdminMenu,
   getBotModeToggleKeyboard,
   getMainMenu,
@@ -101,7 +105,7 @@ updates.on('message_new', async (context: MessageContext) => {
 
   // Очистка обычной клавиатуры (доступна всем в ЛС, админам в чате)
   if (command === '/clearkeyboard') {
-    if (inChat && !isAdmin) return; // в чате только админ
+    if (inChat) return; // в чате инлайн кнопки
     return context.send('⌨️ Клавиатура скрыта.', {
       keyboard: JSON.stringify({ buttons: [], one_time: true }),
     });
@@ -115,13 +119,20 @@ updates.on('message_new', async (context: MessageContext) => {
 
     // Вход через /start или "Начать"
     if (command === 'начать' || command === '/start') {
-      const hasContent = (await getTardigrades()).length > 0 || questions.length > 0;
+      const tardigrades = await getTardigrades();
+      const hasContent = tardigrades.length > 0 || questions.length > 0;
       if (hasContent) {
-        const mainMenuKeyboard = getMainMenu(true, true, questions.length > 0, false, false);
+        const mainMenuKeyboard = getMainMenu(
+          true,
+          tardigrades.length > 0,
+          questions.length > 0,
+          false,
+          false,
+        );
         return context.send(`${BOT_ICON} Главное меню:`, { keyboard: mainMenuKeyboard });
       } else {
         return context.send(`${BOT_ICON} Админ-панель:`, {
-          keyboard: getAdminMenu(false, enable_messages, enable_chats, quizCsvUrl),
+          keyboard: getAdminMenu(questions.length > 0, enable_messages, enable_chats, quizCsvUrl),
         });
       }
     }
@@ -140,7 +151,7 @@ updates.on('message_new', async (context: MessageContext) => {
         '',
         'Команды:',
         '/start – открыть главное меню',
-        '/clearkeyboard – убрать обычную клавиатуру бота (в чате доступно только админам).',
+        '/clearkeyboard – убрать обычную клавиатуру бота (только в личных сообщениях).',
         '',
         'Загрузка тихоходок дня:',
         '– Кнопка «🔄 Синхронизация» загружает фото и подписи из указанного альбома ВК в базу тихоходок.',
@@ -333,9 +344,7 @@ updates.on('message_new', async (context: MessageContext) => {
         );
         return context.send(
           `✅ Импортировано ${count} вопросов из Google Таблицы. Ссылка сохранена для автообновления.`,
-          {
-            keyboard: updatedMainMenuKeyboard,
-          },
+          { keyboard: updatedMainMenuKeyboard },
         );
       } catch (e: any) {
         return context.send(`❌ Не удалось загрузить таблицу: ${e.message}`);
@@ -406,7 +415,23 @@ updates.on('message_new', async (context: MessageContext) => {
 
     // Обработка кнопки «Квиз» / «Продолжить квиз»
     if (payload?.action === 'quiz') {
-      const question = await getUnansweredQuestion(String(userId));
+      const peerId = String(context.peerId);
+      const userIdStr = String(userId);
+
+      // Удаляем предыдущую сессию в этом чате/ЛС (если есть)
+      const oldSession = await getQuizSession(userIdStr, peerId);
+      if (oldSession) {
+        try {
+          await api.messages.delete({
+            message_ids: [oldSession.message_id],
+            delete_for_all: 1,
+          });
+        } catch (e) {
+          // игнорируем ошибку удаления
+        }
+      }
+
+      const question = await getUnansweredQuestion(userIdStr);
       if (!question) {
         let resultMsg = `${BOT_ICON} Все доступные вопросы пройдены!\n📈 Результат: ${stats.correct} из ${stats.total}\n\n`;
         if (stats.percent === 100) resultMsg += '🏆 Невероятно! Это абсолютный успех!';
@@ -415,63 +440,177 @@ updates.on('message_new', async (context: MessageContext) => {
         else resultMsg += 'Хороший результат!';
         return context.send(resultMsg, { keyboard: quizRestartKeyboard });
       }
-      const qKeyboard = generateShuffledQuestionKeyboard(question);
-      return context.send(`${BOT_ICON} Вопрос:\n\n❓ ${question.question}`, {
-        keyboard: qKeyboard,
-      });
-    }
-
-    // Обработка ответа на вопрос квиза
-    if (payload?.action === 'quiz_ans') {
-      const { qid, isCorrect } = payload;
-      const q = questions.find((item) => item.id === qid);
-      if (!q) return context.send('❌ Вопрос не найден.');
-
-      await saveQuizAnswer(String(userId), qid, isCorrect);
-      const [updatedTardigrades, updatedQuestions, updatedStats] = await Promise.all([
-        getTardigrades(),
-        getQuestions(),
-        getQuizStats(String(userId)),
-      ]);
-
-      const feedbackMessage = isCorrect
-        ? '✅ Верно!'
-        : `❌ Неправильно. Правильный ответ: ${q.options[q.correct - 1]}`;
-
-      const updatedMainMenuKeyboard = getMainMenu(
-        isAdmin && !inChat,
-        updatedTardigrades.length > 0,
-        updatedQuestions.length > 0,
-        updatedStats.answered > 0 && updatedStats.answered < updatedStats.total,
-        inChat,
-      );
-
-      await context.send(feedbackMessage, { keyboard: updatedMainMenuKeyboard });
-
-      const nextQ = await getUnansweredQuestion(String(userId));
-      if (!nextQ) {
-        const finalStats = await getQuizStats(String(userId));
-        return context.send(
-          `${BOT_ICON} Квиз завершен! Результат: ${finalStats.correct} из ${finalStats.total}`,
-          { keyboard: quizRestartKeyboard },
-        );
-      }
-
-      const nextKeyboard = generateShuffledQuestionKeyboard(nextQ);
-      return context.send(`${BOT_ICON} Следующий вопрос:\n\n❓ ${nextQ.question}`, {
-        keyboard: nextKeyboard,
-      });
+      const { message, keyboard } = generateQuestionMessageAndKeyboard(question);
+      const sent = await context.send(message, { keyboard });
+      await upsertQuizSession(userIdStr, peerId, sent.id);
+      return;
     }
 
     // Обработка кнопки «Пройти заново»
     if (payload?.action === 'quiz_reset') {
-      await resetQuiz(String(userId));
-      return context.send(`${BOT_ICON} Прогресс квиза сброшен. Можно начинать заново!`, {
-        keyboard: getMainMenu(isAdmin && !inChat, hasTardigrades, hasQuestions, false, inChat),
-      });
+      const peerId = String(context.peerId);
+      // После сброса, сразу пытаемся получить первый вопрос
+      const userIdStr = String(userId);
+
+      // Удалим старую сессию, если была
+      const oldSession = await getQuizSession(userIdStr, peerId);
+      if (oldSession) {
+        try {
+          await api.messages.delete({
+            message_ids: [oldSession.message_id],
+            delete_for_all: 1,
+          });
+        } catch (e) {}
+        await deleteQuizSession(userIdStr, peerId);
+      }
+
+      await resetQuiz(userIdStr);
+      const firstQuestion = await getUnansweredQuestion(userIdStr);
+      if (firstQuestion) {
+        const { message, keyboard } = generateQuestionMessageAndKeyboard(firstQuestion);
+        const combinedMessage = `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n${message}`;
+        const sent = await context.send(combinedMessage, { keyboard });
+        await upsertQuizSession(userIdStr, peerId, sent.id);
+      } else {
+        // Если вопросов нет даже после сброса (например, база пуста)
+        return context.send(
+          `${BOT_ICON} Прогресс квиза сброшен, но вопросов для нового квиза не найдено.`,
+          {
+            keyboard: getMainMenu(isAdmin && !inChat, hasTardigrades, hasQuestions, false, inChat),
+          },
+        );
+      }
+      return;
     }
   } catch (error) {
     console.error('Bot error:', error);
     await context.send('❌ Произошла ошибка.');
+  }
+});
+
+updates.on('message_event', async (event) => {
+  let answered = false;
+  const answer = async (text?: string) => {
+    if (answered) return;
+    answered = true;
+    try {
+      await api.messages.sendMessageEventAnswer({
+        event_id: event.eventId,
+        user_id: event.userId,
+        peer_id: event.peerId,
+        event_data: text ? JSON.stringify({ type: 'show_snackbar', text }) : undefined,
+      });
+    } catch (e) {
+      console.error('Ошибка при ответе на callback:', e);
+    }
+  };
+
+  // Безусловно подтверждаем событие сразу же, чтобы кнопка не зависала
+  await answer();
+
+  try {
+    const rawEventPayload = event.eventPayload;
+    let buttonPayload: { action?: string; qid?: number; isCorrect?: boolean } | undefined;
+
+    // Проверяем, является ли payload строкой и пытаемся распарсить
+    if (typeof rawEventPayload === 'string') {
+      try {
+        buttonPayload = JSON.parse(rawEventPayload);
+        console.log('Parsed string payload:', buttonPayload);
+      } catch (e) {
+        console.error('Ошибка парсинга payload из строки:', e);
+      }
+    } else if (typeof rawEventPayload === 'object' && rawEventPayload !== null) {
+      // Если это уже объект, используем его напрямую
+      buttonPayload = rawEventPayload as { action?: string; qid?: number; isCorrect?: boolean };
+    }
+
+    // Условие для проверки action
+    if (!buttonPayload || typeof buttonPayload.action !== 'string' || buttonPayload.action.trim() !== 'quiz_ans') {
+      // Событие уже подтверждено, специфического действия для квиза нет
+      return;
+    }
+
+
+    const { qid, isCorrect } = buttonPayload;
+    if (qid === undefined || isCorrect === undefined) {
+      await answer('Произошла ошибка в данных кнопки.');
+      return;
+    }
+
+    const senderStr = String(event.userId);
+    const peerIdStr = String(event.peerId);
+
+    const session = await getQuizSession(senderStr, peerIdStr);
+    if (!session) {
+      await answer('Этот вопрос уже неактивен.');
+      return;
+    }
+
+    if (await isQuestionAnswered(senderStr, qid)) {
+      await answer('Вы уже ответили на этот вопрос.');
+      return;
+    }
+
+    const questions = await getQuestions();
+    const question = questions.find((q) => q.id === qid);
+    if (!question) {
+      await answer('Произошла ошибка: вопрос не найден.');
+      return;
+    }
+
+    await saveQuizAnswer(senderStr, qid, isCorrect);
+    const feedbackText = isCorrect ? '✅ Верно!' : '❌ Неправильно.';
+
+    // Отвечаем на callback со snackbar-уведомлением (обновит предыдущее подтверждение)
+    await answer(feedbackText);
+
+    // Обновляем сообщение с квизом
+    const nextQ = await getUnansweredQuestion(senderStr);
+    const messageId = session.message_id;
+
+    if (nextQ) {
+      const { message, keyboard } = generateQuestionMessageAndKeyboard(nextQ);
+      const combinedMessage = `${feedbackText}\n\n${message}`;
+      try {
+        await api.messages.edit({
+          peer_id: event.peerId,
+          message_id: messageId,
+          message: combinedMessage,
+          keyboard,
+        });
+      } catch (e) {
+        const result = await api.messages.send({
+          peer_id: event.peerId,
+          random_id: 0,
+          message: combinedMessage,
+          keyboard,
+        });
+        const newMsgId = (result as any).message_id as number;
+        await upsertQuizSession(senderStr, peerIdStr, newMsgId);
+      }
+    } else {
+      const finalStats = await getQuizStats(senderStr);
+      const finalMessage = `${feedbackText}\n\n👾 Квиз завершён! Результат: ${finalStats.correct} из ${finalStats.total}`;
+      try {
+        await api.messages.edit({
+          peer_id: event.peerId,
+          message_id: messageId,
+          message: finalMessage,
+          keyboard: quizRestartKeyboard,
+        });
+      } catch (e) {
+        await api.messages.send({
+          peer_id: event.peerId,
+          random_id: 0,
+          message: finalMessage,
+          keyboard: quizRestartKeyboard,
+        });
+      }
+      await deleteQuizSession(senderStr, peerIdStr);
+    }
+  } catch (error) {
+    console.error('Ошибка в обработчике message_event:', error);
+    await answer('Произошла ошибка.');
   }
 });
