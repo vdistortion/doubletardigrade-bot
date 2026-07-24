@@ -2,9 +2,6 @@ name: Deploy Main
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   deploy:

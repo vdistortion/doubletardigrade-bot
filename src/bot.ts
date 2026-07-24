@@ -526,11 +526,14 @@ updates.on('message_event', async (event) => {
     }
 
     // Условие для проверки action
-    if (!buttonPayload || typeof buttonPayload.action !== 'string' || buttonPayload.action.trim() !== 'quiz_ans') {
+    if (
+      !buttonPayload ||
+      typeof buttonPayload.action !== 'string' ||
+      buttonPayload.action.trim() !== 'quiz_ans'
+    ) {
       // Событие уже подтверждено, специфического действия для квиза нет
       return;
     }
-
 
     const { qid, isCorrect } = buttonPayload;
     if (qid === undefined || isCorrect === undefined) {
