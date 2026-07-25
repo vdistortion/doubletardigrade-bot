@@ -60,7 +60,8 @@
 1. Установите **Node.js**, **NPM**, **Docker** и **Docker Compose**.
 
 ```shell
-apt update && apt upgrade -y && apt install npm -y && curl -fsSL https://get.docker.com | sh
+apt update && apt upgrade -y && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash && curl -fsSL https://get.docker.com | sh && reboot
+nvm install --lts
 ```
 
 2. Склонируйте репозиторий:
@@ -140,4 +141,4 @@ ssh -T git@github.com
 ---
 
 **Права на проект:** администраторы сообщества [«Фан-клуб Tardigrade Inferno»](https://vk.com/club212742929).  
-**Последняя версия исходного кода:** [скачать архив](https://github.com/vdistortion/doubletardigrade-bot/archive/refs/heads/main.zip).
+**Последняя версия исходного кода:** `<> Code` -> `Download ZIP`.

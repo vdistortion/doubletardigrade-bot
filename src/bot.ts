@@ -43,6 +43,10 @@ const SUPER_ADMINS = ADMIN_ID_ENV.split(',')
   .map((id) => parseInt(id.trim()))
   .filter((id) => !isNaN(id));
 
+function isPeerChat(peerId: number): boolean {
+  return peerId >= 2000000000;
+}
+
 export const api = new API({ token: GROUP_TOKEN });
 export const userApi = new API({ token: USER_TOKEN });
 const upload = new Upload({ api });
@@ -442,7 +446,8 @@ updates.on('message_new', async (context: MessageContext) => {
       }
       const { message, keyboard } = generateQuestionMessageAndKeyboard(question);
       const sent = await context.send(message, { keyboard });
-      await upsertQuizSession(userIdStr, peerId, sent.id);
+      const msgId = context.isChat ? sent.conversation_message_id : sent.id;
+      await upsertQuizSession(userIdStr, peerId, msgId);
       return;
     }
 
@@ -470,7 +475,8 @@ updates.on('message_new', async (context: MessageContext) => {
         const { message, keyboard } = generateQuestionMessageAndKeyboard(firstQuestion);
         const combinedMessage = `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n${message}`;
         const sent = await context.send(combinedMessage, { keyboard });
-        await upsertQuizSession(userIdStr, peerId, sent.id);
+        const msgId = context.isChat ? sent.conversation_message_id : sent.id;
+        await upsertQuizSession(userIdStr, peerId, msgId);
       } else {
         // Если вопросов нет даже после сброса (например, база пуста)
         return context.send(
@@ -526,11 +532,14 @@ updates.on('message_event', async (event) => {
     }
 
     // Условие для проверки action
-    if (!buttonPayload || typeof buttonPayload.action !== 'string' || buttonPayload.action.trim() !== 'quiz_ans') {
+    if (
+      !buttonPayload ||
+      typeof buttonPayload.action !== 'string' ||
+      buttonPayload.action.trim() !== 'quiz_ans'
+    ) {
       // Событие уже подтверждено, специфического действия для квиза нет
       return;
     }
-
 
     const { qid, isCorrect } = buttonPayload;
     if (qid === undefined || isCorrect === undefined) {
@@ -567,18 +576,25 @@ updates.on('message_event', async (event) => {
 
     // Обновляем сообщение с квизом
     const nextQ = await getUnansweredQuestion(senderStr);
-    const messageId = session.message_id;
 
     if (nextQ) {
       const { message, keyboard } = generateQuestionMessageAndKeyboard(nextQ);
       const combinedMessage = `${feedbackText}\n\n${message}`;
+
+      const editParams: any = {
+        peer_id: event.peerId,
+        message: combinedMessage,
+        keyboard,
+      };
+
+      if (isPeerChat(event.peerId)) {
+        editParams.conversation_message_id = session.message_id;
+      } else {
+        editParams.message_id = session.message_id;
+      }
+
       try {
-        await api.messages.edit({
-          peer_id: event.peerId,
-          message_id: messageId,
-          message: combinedMessage,
-          keyboard,
-        });
+        await api.messages.edit(editParams);
       } catch (e) {
         const result = await api.messages.send({
           peer_id: event.peerId,
@@ -586,19 +602,31 @@ updates.on('message_event', async (event) => {
           message: combinedMessage,
           keyboard,
         });
-        const newMsgId = (result as any).message_id as number;
+
+        const newMsgId = isPeerChat(event.peerId)
+          ? (result as any).conversation_message_id
+          : (result as any).message_id;
+
         await upsertQuizSession(senderStr, peerIdStr, newMsgId);
       }
     } else {
       const finalStats = await getQuizStats(senderStr);
       const finalMessage = `${feedbackText}\n\n👾 Квиз завершён! Результат: ${finalStats.correct} из ${finalStats.total}`;
+
+      const editParams: any = {
+        peer_id: event.peerId,
+        message: finalMessage,
+        keyboard: quizRestartKeyboard,
+      };
+
+      if (isPeerChat(event.peerId)) {
+        editParams.conversation_message_id = session.message_id;
+      } else {
+        editParams.message_id = session.message_id;
+      }
+
       try {
-        await api.messages.edit({
-          peer_id: event.peerId,
-          message_id: messageId,
-          message: finalMessage,
-          keyboard: quizRestartKeyboard,
-        });
+        await api.messages.edit(editParams);
       } catch (e) {
         await api.messages.send({
           peer_id: event.peerId,
@@ -607,6 +635,7 @@ updates.on('message_event', async (event) => {
           keyboard: quizRestartKeyboard,
         });
       }
+
       await deleteQuizSession(senderStr, peerIdStr);
     }
   } catch (error) {
