@@ -47,6 +47,13 @@ function isPeerChat(peerId: number): boolean {
   return peerId >= 2000000000;
 }
 
+function getMessageIdFromResponse(sent: any, isChat: boolean): number | null {
+  if (isChat) {
+    return sent.conversationMessageId ?? sent.id ?? null;
+  }
+  return sent.id ?? sent.message_id ?? null;
+}
+
 export const api = new API({ token: GROUP_TOKEN });
 export const userApi = new API({ token: USER_TOKEN });
 const upload = new Upload({ api });
@@ -427,7 +434,8 @@ updates.on('message_new', async (context: MessageContext) => {
       if (oldSession) {
         try {
           await api.messages.delete({
-            message_ids: [oldSession.message_id],
+            peer_id: Number(peerId),
+            cmids: [oldSession.message_id],
             delete_for_all: 1,
           });
         } catch (e) {
@@ -446,8 +454,12 @@ updates.on('message_new', async (context: MessageContext) => {
       }
       const { message, keyboard } = generateQuestionMessageAndKeyboard(question);
       const sent = await context.send(message, { keyboard });
-      const msgId = context.isChat ? sent.conversation_message_id : sent.id;
-      await upsertQuizSession(userIdStr, peerId, msgId);
+      const msgId = getMessageIdFromResponse(sent, context.isChat);
+      if (typeof msgId === 'number' && msgId > 0) {
+        await upsertQuizSession(userIdStr, peerId, msgId);
+      } else {
+        console.error('Не удалось получить ID сообщения для квиза');
+      }
       return;
     }
 
@@ -462,7 +474,8 @@ updates.on('message_new', async (context: MessageContext) => {
       if (oldSession) {
         try {
           await api.messages.delete({
-            message_ids: [oldSession.message_id],
+            peer_id: Number(peerId),
+            cmids: [oldSession.message_id],
             delete_for_all: 1,
           });
         } catch (e) {}
@@ -475,8 +488,12 @@ updates.on('message_new', async (context: MessageContext) => {
         const { message, keyboard } = generateQuestionMessageAndKeyboard(firstQuestion);
         const combinedMessage = `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n${message}`;
         const sent = await context.send(combinedMessage, { keyboard });
-        const msgId = context.isChat ? sent.conversation_message_id : sent.id;
-        await upsertQuizSession(userIdStr, peerId, msgId);
+        const msgId = getMessageIdFromResponse(sent, context.isChat);
+        if (typeof msgId === 'number' && msgId > 0) {
+          await upsertQuizSession(userIdStr, peerId, msgId);
+        } else {
+          console.error('Не удалось получить ID сообщения после сброса квиза');
+        }
       } else {
         // Если вопросов нет даже после сброса (например, база пуста)
         return context.send(
@@ -603,11 +620,13 @@ updates.on('message_event', async (event) => {
           keyboard,
         });
 
-        const newMsgId = isPeerChat(event.peerId)
-          ? (result as any).conversation_message_id
-          : (result as any).message_id;
-
-        await upsertQuizSession(senderStr, peerIdStr, newMsgId);
+        const isChat = isPeerChat(event.peerId);
+        const newMsgId = getMessageIdFromResponse(result, isChat);
+        if (typeof newMsgId === 'number' && newMsgId > 0) {
+          await upsertQuizSession(senderStr, peerIdStr, newMsgId);
+        } else {
+          console.error('Не удалось получить ID нового сообщения квиза после редактирования');
+        }
       }
     } else {
       const finalStats = await getQuizStats(senderStr);

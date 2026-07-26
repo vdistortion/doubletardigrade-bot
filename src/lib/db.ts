@@ -274,6 +274,7 @@ export async function upsertQuizSession(
   peerId: string,
   messageId: number,
 ): Promise<void> {
+  if (!messageId) throw new Error('messageId is required for upsertQuizSession');
   await db().query(
     `INSERT INTO quiz_sessions (user_id, peer_id, message_id)
      VALUES ($1, $2, $3)
