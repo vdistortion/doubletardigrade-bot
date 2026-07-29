@@ -51,41 +51,22 @@ export function generateQuestionMessageAndKeyboard(question: QuizQuestion): {
 
 /**
  * Главное меню
- * @param isAdmin админ в ЛС
  * @param hasTardigrades есть тихоходки
  * @param hasQuestions есть вопросы квиза
  * @param isQuizInProgress квиз начат
- * @param isChat чат (true) или ЛС (false)
  */
 export function getMainMenu(
-  isAdmin: boolean,
   hasTardigrades: boolean,
   hasQuestions: boolean,
   isQuizInProgress: boolean,
-  isChat: boolean,
 ): string {
   const buttons: any[] = [];
-
-  // Верхний ряд: только для админов в ЛС — кнопка админ-панели
-  if (isAdmin && !isChat) {
-    buttons.push([
-      {
-        action: {
-          type: 'text',
-          label: '⚙️ Админ-панель',
-          payload: JSON.stringify({ action: 'admin_menu' }),
-        },
-        color: 'negative',
-      },
-    ]);
-  }
-
-  // Нижний ряд: основные кнопки (Тихоходка и Квиз)
   const mainRow: any[] = [];
+
   if (hasTardigrades) {
     mainRow.push({
       action: {
-        type: 'text',
+        type: 'callback',
         label: '👾 Тихоходка дня',
         payload: JSON.stringify({ action: 'tardigrade_day' }),
       },
@@ -95,7 +76,7 @@ export function getMainMenu(
   if (hasQuestions) {
     mainRow.push({
       action: {
-        type: 'text',
+        type: 'callback',
         label: isQuizInProgress ? '🔬 Продолжить квиз' : '🔬 Квиз',
         payload: JSON.stringify({ action: 'quiz' }),
       },
@@ -106,7 +87,7 @@ export function getMainMenu(
     buttons.push(mainRow);
   }
 
-  return JSON.stringify(isChat ? { inline: true, buttons } : { one_time: false, buttons });
+  return JSON.stringify({ inline: true, buttons });
 }
 
 /**
@@ -122,7 +103,7 @@ export function getAdminMenu(
     [
       {
         action: {
-          type: 'text',
+          type: 'callback',
           label: '🔄 Синхронизация',
           payload: JSON.stringify({ action: 'sync_album' }),
         },
@@ -130,7 +111,7 @@ export function getAdminMenu(
       },
       {
         action: {
-          type: 'text',
+          type: 'callback',
           label: '🧪 Тест выдачи',
           payload: JSON.stringify({ action: 'test_tardigrade' }),
         },
@@ -146,7 +127,7 @@ export function getAdminMenu(
   if (!hasQuestions) {
     questionButtons.push({
       action: {
-        type: 'text',
+        type: 'callback',
         label: '🧪 Загрузить демо‑вопросы',
         payload: JSON.stringify({ action: 'load_demo_questions' }),
       },
@@ -158,7 +139,7 @@ export function getAdminMenu(
   if (quizCsvUrl) {
     questionButtons.push({
       action: {
-        type: 'text',
+        type: 'callback',
         label: '🔄 Обновить квиз',
         payload: JSON.stringify({ action: 'refresh_quiz' }),
       },
@@ -184,7 +165,7 @@ export function getAdminMenu(
   buttons.push([
     {
       action: {
-        type: 'text',
+        type: 'callback',
         label: modeLabel,
         payload: JSON.stringify({ action: 'bot_mode_toggle_menu' }),
       },
@@ -196,7 +177,7 @@ export function getAdminMenu(
   buttons.push([
     {
       action: {
-        type: 'text',
+        type: 'callback',
         label: '❓ Справка',
         payload: JSON.stringify({ action: 'admin_help' }),
       },
@@ -214,7 +195,7 @@ export function getBotModeToggleKeyboard(enableMessages: boolean, enableChats: b
       [
         {
           action: {
-            type: 'text',
+            type: 'callback',
             label: enableMessages ? '❌ Выключить для сообщений' : '✅ Включить для сообщений',
             payload: JSON.stringify({ action: 'toggle_mode_messages' }),
           },
@@ -224,7 +205,7 @@ export function getBotModeToggleKeyboard(enableMessages: boolean, enableChats: b
       [
         {
           action: {
-            type: 'text',
+            type: 'callback',
             label: enableChats ? '❌ Выключить для чатов' : '✅ Включить для чатов',
             payload: JSON.stringify({ action: 'toggle_mode_chats' }),
           },
@@ -241,7 +222,7 @@ export const quizRestartKeyboard = JSON.stringify({
     [
       {
         action: {
-          type: 'text',
+          type: 'callback',
           label: '👾 Тихоходка дня',
           payload: JSON.stringify({ action: 'tardigrade_day' }),
         },
@@ -249,7 +230,7 @@ export const quizRestartKeyboard = JSON.stringify({
       },
       {
         action: {
-          type: 'text',
+          type: 'callback',
           label: '🔄 Пройти заново',
           payload: JSON.stringify({ action: 'quiz_reset' }),
         },
