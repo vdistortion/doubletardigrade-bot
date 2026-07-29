@@ -79,13 +79,25 @@ export async function getTodayTardigrade(
 }
 
 export async function syncAlbum(groupId: number, albumId: number, vkUserApi: any): Promise<number> {
-  const response = await vkUserApi.photos.get({
-    owner_id: -groupId,
-    album_id: albumId,
-    count: 1000,
-  });
+  const allPhotos: any[] = [];
+  let offset = 0;
+  const countPerRequest = 1000;
 
-  const records: { text: string; description: string | null; image: string }[] = response.items.map(
+  while (true) {
+    const response = await vkUserApi.photos.get({
+      owner_id: -groupId,
+      album_id: albumId,
+      count: countPerRequest,
+      offset: offset,
+    });
+    const items = response.items;
+    if (!items || items.length === 0) break;
+    allPhotos.push(...items);
+    if (items.length < countPerRequest) break;
+    offset += countPerRequest;
+  }
+
+  const records: { text: string; description: string | null; image: string }[] = allPhotos.map(
     (p: any) => {
       const lines = (p.text || '').split('\n');
       return {
@@ -274,6 +286,7 @@ export async function upsertQuizSession(
   peerId: string,
   messageId: number,
 ): Promise<void> {
+  if (!messageId) throw new Error('messageId is required for upsertQuizSession');
   await db().query(
     `INSERT INTO quiz_sessions (user_id, peer_id, message_id)
      VALUES ($1, $2, $3)
