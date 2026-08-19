@@ -719,7 +719,10 @@ updates.on('message_event', async (event) => {
   console.log('EVENT:', event.conversationMessageId, event?.peerId, event?.userId, event?.eventId);
   console.log('EVENT CMID:', event.conversationMessageId, 'FULL:', JSON.stringify(event));
 
+  let answered = false;
   const answer = async (text?: string): Promise<void> => {
+    if (answered) return;
+    answered = true;
     try {
       await api.messages.sendMessageEventAnswer({
         event_id: event.eventId,
@@ -1120,5 +1123,7 @@ updates.on('message_event', async (event) => {
     console.error('Ошибка в обработчике message_event:', error);
 
     await answer('Произошла ошибка.');
+  } finally {
+    await answer();
   }
 });
