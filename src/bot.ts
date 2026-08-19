@@ -1009,7 +1009,7 @@ updates.on('message_event', async (event) => {
 
       const activeCmid = await getActiveMessage(senderStr, peerIdStr);
 
-      if (!activeCmid || (typeof eventCmid === 'number' && eventCmid !== activeCmid)) {
+      if (typeof eventCmid !== 'number' || !activeCmid || eventCmid !== activeCmid) {
         await answer('Этот вопрос уже неактивен.');
         return;
       }
