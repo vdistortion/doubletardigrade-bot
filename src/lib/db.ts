@@ -281,32 +281,29 @@ export async function resetQuiz(userId: string): Promise<void> {
 
 // ─── Сессии квиза (для инлайн-редактирования) ───────────────────────────────
 
-export async function upsertQuizSession(
+export async function setActiveMessage(
   userId: string,
   peerId: string,
-  messageId: number,
+  cmid: number,
 ): Promise<void> {
-  if (!messageId) throw new Error('messageId is required for upsertQuizSession');
+  if (!cmid) throw new Error('cmid is required for setActiveMessage');
   await db().query(
-    `INSERT INTO quiz_sessions (user_id, peer_id, message_id)
+    `INSERT INTO quiz_sessions (user_id, peer_id, active_message_id)
      VALUES ($1, $2, $3)
-     ON CONFLICT (user_id, peer_id) DO UPDATE SET message_id = EXCLUDED.message_id`,
-    [userId, peerId, messageId],
+       ON CONFLICT (user_id, peer_id) DO UPDATE SET active_message_id = EXCLUDED.active_message_id`,
+    [userId, peerId, cmid],
   );
 }
 
-export async function getQuizSession(
-  userId: string,
-  peerId: string,
-): Promise<{ message_id: number } | null> {
-  const { rows } = await db().query<{ message_id: number }>(
-    'SELECT message_id FROM quiz_sessions WHERE user_id = $1 AND peer_id = $2',
+export async function getActiveMessage(userId: string, peerId: string): Promise<number | null> {
+  const { rows } = await db().query<{ active_message_id: number | null }>(
+    'SELECT active_message_id FROM quiz_sessions WHERE user_id = $1 AND peer_id = $2',
     [userId, peerId],
   );
-  return rows[0] || null;
+  return rows[0]?.active_message_id ?? null;
 }
 
-export async function deleteQuizSession(userId: string, peerId: string): Promise<void> {
+export async function clearActiveMessage(userId: string, peerId: string): Promise<void> {
   await db().query('DELETE FROM quiz_sessions WHERE user_id = $1 AND peer_id = $2', [
     userId,
     peerId,
