@@ -1041,13 +1041,11 @@ updates.on('message_event', async (event) => {
       if (nextQ) {
         const { message, keyboard } = generateQuestionMessageAndKeyboard(nextQ);
 
-        const combinedMessage = `${feedbackText}\n\n${message}`;
-
         try {
           await api.messages.edit({
             peer_id: event.peerId,
             conversation_message_id: activeCmid,
-            message: combinedMessage,
+            message,
             keyboard,
           });
         } catch (e) {
@@ -1056,7 +1054,7 @@ updates.on('message_event', async (event) => {
           const result = await api.messages.send({
             peer_ids: [event.peerId],
             random_id: randomId(),
-            message: combinedMessage,
+            message,
             keyboard,
           });
 
@@ -1079,9 +1077,7 @@ updates.on('message_event', async (event) => {
       const finalStats = await getQuizStats(senderStr);
 
       const finalMessage =
-        `${feedbackText}\n\n` +
-        `${BOT_ICON} Квиз завершён! ` +
-        `Результат: ${finalStats.correct} из ${finalStats.total}`;
+        `${BOT_ICON} Квиз завершён! ` + `Результат: ${finalStats.correct} из ${finalStats.total}`;
 
       try {
         await api.messages.edit({
