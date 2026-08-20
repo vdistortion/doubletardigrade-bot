@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS quiz_answers (
 CREATE TABLE IF NOT EXISTS quiz_sessions (
     user_id TEXT NOT NULL,
     peer_id TEXT NOT NULL,
-    message_id INTEGER NOT NULL,
+    active_message_id INTEGER,
     PRIMARY KEY (user_id, peer_id)
 );
 
