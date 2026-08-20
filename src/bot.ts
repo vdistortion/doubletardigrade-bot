@@ -19,7 +19,6 @@ import {
   setAlbumId,
   setActiveMessage,
   getActiveMessage,
-  clearActiveMessage,
   isQuestionAnswered,
 } from './lib/db.js';
 import { isUserAdmin } from './lib/admin.js';
@@ -30,6 +29,7 @@ import {
   getMainMenu,
   quizRestartKeyboard,
 } from './lib/keyboards.js';
+import { getMention } from './lib/mention.js';
 
 const BOT_ICON = '👾';
 
@@ -65,7 +65,7 @@ function getCmidFromResponse(sent: unknown): number | null {
 async function sendNextQuestion(peerId: number, userId: number, prefix = ''): Promise<void> {
   const userIdStr = String(userId);
   const peerIdStr = String(peerId);
-
+  const head = await buildMentionHead(peerId, userId);
   const oldCmid = await getActiveMessage(userIdStr, peerIdStr);
 
   if (oldCmid) {
@@ -100,7 +100,7 @@ async function sendNextQuestion(peerId: number, userId: number, prefix = ''): Pr
     const sent = await api.messages.send({
       peer_ids: [peerId],
       random_id: randomId(),
-      message: prefix + resultMsg,
+      message: head + prefix + resultMsg,
       keyboard: quizRestartKeyboard,
     });
 
@@ -110,12 +110,12 @@ async function sendNextQuestion(peerId: number, userId: number, prefix = ''): Pr
     return;
   }
 
-  const { message, keyboard } = generateQuestionMessageAndKeyboard(question);
+  const { message, keyboard } = generateQuestionMessageAndKeyboard(question, userId);
 
   const sent = await api.messages.send({
     peer_ids: [peerId],
     random_id: randomId(),
-    message: prefix + message,
+    message: head + prefix + message,
     keyboard,
   });
 
@@ -126,6 +126,26 @@ async function sendNextQuestion(peerId: number, userId: number, prefix = ''): Pr
   } else {
     console.error('Не удалось получить ID сообщения квиза:', sent);
   }
+}
+
+async function sendTardigradeDay(peerId: number, userId: number, keyboard: string): Promise<void> {
+  const { tardigrade, isNew } = await getTodayTardigrade(String(userId));
+  const head = await buildMentionHead(peerId, userId);
+  const prefix = isNew ? '🎉 Найдена новая тихоходка дня!' : '📖 Эта тихоходка уже была найдена:';
+
+  await api.messages.send({
+    peer_ids: [peerId],
+    random_id: randomId(),
+    message: `${head}${BOT_ICON} ${prefix}\n\n✨ ${tardigrade.text}\n\n🔬 ${tardigrade.description || ''}`,
+    attachment: tardigrade.image || undefined,
+    keyboard,
+  });
+}
+
+async function buildMentionHead(peerId: number, userId: number): Promise<string> {
+  if (!isPeerChat(peerId)) return '';
+  const mention = await getMention(api, userId);
+  return mention ? `👤 ${mention}\n\n` : '';
 }
 
 function parsePayload(rawPayload: unknown): Record<string, any> | undefined {
@@ -162,8 +182,6 @@ async function sendMenu(
     keyboard,
     ...options,
   });
-
-  console.log('SENT RAW:', JSON.stringify(sent));
 
   const cmid = getCmidFromResponse(sent);
 
@@ -281,8 +299,6 @@ async function handleAdminAction(
   const send = (message: string, options: Record<string, any> = {}) =>
     sendEventMessage(peerId, message, options);
   const { enable_messages, enable_chats } = settings;
-
-  const questions = await getQuestions();
   const quizCsvUrl = await getQuizCsvUrl();
 
   if (action === 'admin_help') {
@@ -454,11 +470,6 @@ async function handleAdminAction(
 
     return true;
   }
-
-  // Обработка ссылки на альбом выполняется отдельно,
-  // потому что это обычное сообщение, а не callback.
-  void userId;
-  void questions;
 
   return false;
 }
@@ -633,53 +644,6 @@ updates.on('message_new', async (context: MessageContext) => {
     if (!hasContent) {
       return;
     }
-
-    const isQuizInProgress = stats.answered > 0 && stats.answered < stats.total;
-
-    const mainMenuKeyboard = getMainMenu(hasTardigrades, hasQuestions, isQuizInProgress);
-
-    // ─────────────────────────────────────────────────────────────
-    // ТИХОХОДКА ДНЯ
-    // ─────────────────────────────────────────────────────────────
-
-    if (action === 'tardigrade_day') {
-      const { tardigrade, isNew } = await getTodayTardigrade(String(userId));
-
-      const prefix = isNew
-        ? '🎉 Найдена новая тихоходка дня!'
-        : '📖 Эта тихоходка уже была найдена:';
-
-      return context.send(
-        `${BOT_ICON} ${prefix}\n\n✨ ${tardigrade.text}\n\n🔬 ${tardigrade.description || ''}`,
-        {
-          attachment: tardigrade.image || undefined,
-          keyboard: mainMenuKeyboard,
-        },
-      );
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // КВИЗ
-    // ─────────────────────────────────────────────────────────────
-
-    if (action === 'quiz') {
-      await sendNextQuestion(context.peerId, userId);
-      return;
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // СБРОС КВИЗА
-    // ─────────────────────────────────────────────────────────────
-
-    if (action === 'quiz_reset') {
-      await resetQuiz(String(userId));
-      await sendNextQuestion(
-        context.peerId,
-        userId,
-        `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n`,
-      );
-      return;
-    }
   } catch (error) {
     console.error('Bot error:', error);
     await context.send('❌ Произошла ошибка.');
@@ -691,10 +655,6 @@ updates.on('message_new', async (context: MessageContext) => {
 // ============================================================================
 
 updates.on('message_event', async (event) => {
-  console.log('EVENT CMID:', event.conversationMessageId, 'KEYS:', Object.keys(event));
-  console.log('EVENT:', event.conversationMessageId, event?.peerId, event?.userId, event?.eventId);
-  console.log('EVENT CMID:', event.conversationMessageId, 'FULL:', JSON.stringify(event));
-
   let answered = false;
   const answer = async (text?: string): Promise<void> => {
     if (answered) return;
@@ -721,6 +681,7 @@ updates.on('message_event', async (event) => {
           action?: string;
           qid?: number;
           isCorrect?: boolean;
+          uid?: number;
         }
       | undefined;
 
@@ -737,6 +698,7 @@ updates.on('message_event', async (event) => {
         action?: string;
         qid?: number;
         isCorrect?: boolean;
+        uid?: number;
       };
     }
 
@@ -747,13 +709,6 @@ updates.on('message_event', async (event) => {
     }
 
     const action = buttonPayload.action.trim();
-
-    console.log('INLINE CALLBACK:', {
-      action,
-      payload: buttonPayload,
-      userId: event.userId,
-      peerId: event.peerId,
-    });
 
     // ============================================================
     // АДМИН-ПАНЕЛЬ (кнопки тоже inline-callback, поэтому обрабатываются
@@ -772,6 +727,7 @@ updates.on('message_event', async (event) => {
     ];
 
     const isChatPeer = isPeerChat(event.peerId);
+    const { enable_messages, enable_chats } = await getBotSettings();
 
     if (ADMIN_ACTIONS.includes(action)) {
       const isAdmin = await checkAdmin(event.userId);
@@ -781,15 +737,15 @@ updates.on('message_event', async (event) => {
         return;
       }
 
-      const botSettings = await getBotSettings();
-
-      await handleAdminAction(action, event.peerId, event.userId, botSettings);
+      await handleAdminAction(action, event.peerId, event.userId, {
+        enable_messages,
+        enable_chats,
+      });
 
       await answer();
       return;
     }
 
-    const { enable_messages, enable_chats } = await getBotSettings();
     if (!((enable_messages && !isChatPeer) || (enable_chats && isChatPeer))) return;
 
     const eventCmid = event.conversationMessageId;
@@ -805,17 +761,10 @@ updates.on('message_event', async (event) => {
     }
 
     if (action === 'tardigrade_day') {
-      const senderStr = String(event.userId);
-      const { tardigrade, isNew } = await getTodayTardigrade(senderStr);
-      const prefix = isNew
-        ? '🎉 Найдена новая тихоходка дня!'
-        : '📖 Эта тихоходка уже была найдена:';
-      await api.messages.send({
-        peer_ids: [event.peerId],
-        random_id: randomId(),
-        message: `${BOT_ICON} ${prefix}\n\n✨ ${tardigrade.text}\n\n🔬 ${tardigrade.description || ''}`,
-        attachment: tardigrade.image || undefined,
-      });
+      const [tardigrades, questions] = await Promise.all([getTardigrades(), getQuestions()]);
+      const keyboard = getMainMenu(tardigrades.length > 0, questions.length > 0, false);
+
+      await sendTardigradeDay(event.peerId, event.userId, keyboard);
       await answer();
       return;
     }
@@ -841,8 +790,12 @@ updates.on('message_event', async (event) => {
 
     if (action === 'quiz_ans') {
       const qid = Number(buttonPayload.qid);
-
       const isCorrect = Boolean(buttonPayload.isCorrect);
+
+      if (buttonPayload.uid && Number(buttonPayload.uid) !== event.userId) {
+        await answer('Это не ваша кнопка.');
+        return;
+      }
 
       if (!Number.isFinite(qid)) {
         await answer('Произошла ошибка в данных кнопки.');
@@ -850,9 +803,7 @@ updates.on('message_event', async (event) => {
       }
 
       const senderStr = String(event.userId);
-
       const peerIdStr = String(event.peerId);
-
       const activeCmid = await getActiveMessage(senderStr, peerIdStr);
 
       if (typeof eventCmid !== 'number' || !activeCmid || eventCmid !== activeCmid) {
@@ -866,7 +817,6 @@ updates.on('message_event', async (event) => {
       }
 
       const questions = await getQuestions();
-
       const question = questions.find((q) => q.id === qid);
 
       if (!question) {
@@ -877,6 +827,7 @@ updates.on('message_event', async (event) => {
       await saveQuizAnswer(senderStr, qid, isCorrect);
 
       const feedbackText = isCorrect ? '✅ Верно!' : '❌ Неправильно.';
+      const head = await buildMentionHead(event.peerId, event.userId);
 
       // Теперь answer() вызывается только здесь.
       await answer(feedbackText);
@@ -885,13 +836,14 @@ updates.on('message_event', async (event) => {
       const nextQ = await getUnansweredQuestion(senderStr);
 
       if (nextQ) {
-        const { message, keyboard } = generateQuestionMessageAndKeyboard(nextQ);
+        const { message, keyboard } = generateQuestionMessageAndKeyboard(nextQ, event.userId);
+        const messageWithHead = head + message;
 
         try {
           await api.messages.edit({
             peer_id: event.peerId,
             conversation_message_id: activeCmid,
-            message,
+            message: messageWithHead,
             keyboard,
           });
         } catch (e) {
@@ -900,7 +852,7 @@ updates.on('message_event', async (event) => {
           const result = await api.messages.send({
             peer_ids: [event.peerId],
             random_id: randomId(),
-            message,
+            message: messageWithHead,
             keyboard,
           });
 
@@ -923,7 +875,9 @@ updates.on('message_event', async (event) => {
       const finalStats = await getQuizStats(senderStr);
 
       const finalMessage =
-        `${BOT_ICON} Квиз завершён! ` + `Результат: ${finalStats.correct} из ${finalStats.total}`;
+        head +
+        `${BOT_ICON} Квиз завершён! ` +
+        `Результат: ${finalStats.correct} из ${finalStats.total}`;
 
       try {
         await api.messages.edit({

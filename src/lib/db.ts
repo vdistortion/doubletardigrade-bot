@@ -303,13 +303,6 @@ export async function getActiveMessage(userId: string, peerId: string): Promise<
   return rows[0]?.active_message_id ?? null;
 }
 
-export async function clearActiveMessage(userId: string, peerId: string): Promise<void> {
-  await db().query('DELETE FROM quiz_sessions WHERE user_id = $1 AND peer_id = $2', [
-    userId,
-    peerId,
-  ]);
-}
-
 // ─── Настройки бота ────────────────────────────────────────────────────────────
 
 export async function getBotSettings(): Promise<{
