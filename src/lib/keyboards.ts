@@ -2,7 +2,10 @@ import type { QuizQuestion } from './db.js';
 
 const digitEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 
-export function generateQuestionMessageAndKeyboard(question: QuizQuestion): {
+export function generateQuestionMessageAndKeyboard(
+  question: QuizQuestion,
+  ownerId: number,
+): {
   message: string;
   keyboard: string;
 } {
@@ -32,6 +35,7 @@ export function generateQuestionMessageAndKeyboard(question: QuizQuestion): {
           action: 'quiz_ans',
           qid: question.id,
           isCorrect: opt.isCorrect,
+          uid: ownerId,
         }),
       },
       color: 'primary',
