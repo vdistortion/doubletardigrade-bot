@@ -43,13 +43,13 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: REPO_NAME,GHCR_PAT,GHCR_USER
+          envs: REPO_NAME,GHCR_PAT,GHCR_USER,REPO_URL
           script: |
             set -e
             PROJECT_PATH=~/projects/${REPO_NAME}_main
             if [ ! -d "$PROJECT_PATH" ]; then
               mkdir -p ~/projects
-              git clone -b main git@github.com:${{ github.repository }}.git "$PROJECT_PATH"
+              git clone -b main "$REPO_URL" "$PROJECT_PATH"
             fi
             cd "$PROJECT_PATH"
 
@@ -65,3 +65,4 @@ jobs:
           REPO_NAME: ${{ github.event.repository.name }}
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           GHCR_USER: ${{ secrets.GHCR_USER }}
+          REPO_URL: https://${{ github.actor }}:${{ secrets.GHCR_PAT }}@github.com/${{ github.repository }}.git
