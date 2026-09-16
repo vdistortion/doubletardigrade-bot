@@ -66,5 +66,5 @@ jobs:
             docker image prune -f
         env:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          GHCR_USER: ${{ secrets.GHCR_USER }}
+          GHCR_USER: ${{ github.repository_owner }}
           REPO_URL: https://${{ github.actor }}:${{ secrets.GHCR_PAT }}@github.com/${{ github.repository }}.git
