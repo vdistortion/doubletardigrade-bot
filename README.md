@@ -8,7 +8,7 @@
 ### Меню пользователя
 
 - **👾 Тихоходка дня:** бот выбирает случайную тихоходку из базы и присылает её изображение с описанием. Для каждого пользователя доступна одна новая тихоходка в сутки.
-- **🔬 Квиз / Продолжить квиз:** запускает викторину. Бот присылает вопрос и варианты ответа в виде кнопок. Если квиз начат, предлагает продолжить.
+- **🔬 Квиз:** запускает викторину. Бот присылает вопрос и варианты ответа в виде кнопок. Название кнопки не меняется, даже если прохождение квиза уже начато.
 
 ### Админ-панель
 
@@ -70,65 +70,53 @@ git clone https://github.com/vdistortion/doubletardigrade-bot.git
 cd doubletardigrade-bot
 ```
 
-### 4. Настройка SSH-доступа для GitHub Actions
+### 4. Настройка GitHub Actions и GHCR
 
-GitHub Actions подключается к VPS по SSH и запускает деплой. Для этого нужно:
+Деплой выполняется через GitHub Actions:
 
---- На локальной машине ---
+1. GitHub Actions собирает Docker-образ на GitHub.
+2. Образ публикуется в GitHub Container Registry (GHCR).
+3. GitHub Actions подключается к VPS по SSH.
+4. VPS скачивает актуальный образ из GHCR и перезапускает контейнеры.
 
-Сгенерируйте SSH-ключ и скопируйте его на VPS:
+Для подключения GitHub Actions к VPS создайте SSH-ключ:
 
 ```shell
+ssh-keygen -t ed25519 -C "github-actions-deploy"
 ssh-copy-id user@vps-ip
 ```
 
-Приватный ключ (id_ed25519) сохраните в GitHub Secrets под именем SSH_PRIVATE_KEY.
+Содержимое приватного ключа сохраните в GitHub Secrets под именем `SSH_PRIVATE_KEY`. Также добавьте:
 
-Также добавьте в GitHub Secrets:
-VPS_HOST — IP-адрес или домен вашего VPS
-VPS_USERNAME — имя пользователя для SSH-подключения
+- `VPS_HOST` — IP-адрес или домен VPS;
+- `VPS_USERNAME` — имя пользователя для SSH-подключения;
+- `GHCR_PAT` — токен GitHub для скачивания приватного образа с GHCR.
 
---- На VPS ---
+Токен `GHCR_PAT` должен иметь право `read:packages`. Если Docker-пакет публичный, авторизация на VPS для скачивания образа не обязательна, но workflow всё равно ожидает этот secret.
 
-Сгенерируйте SSH-ключ для клонирования репозитория с GitHub:
+Отдельный SSH-ключ на VPS для доступа к GitHub не нужен: репозиторий скачивается по HTTPS с использованием `GHCR_PAT`. Встроенный `GITHUB_TOKEN` используется GitHub Actions для публикации образа в GHCR.
 
-```shell
-ssh-keygen -t ed25519 -C "vps-deploy"
-```
+### 5. Запуск и деплой
 
-Добавьте GitHub в список доверенных хостов:
+Для автоматического деплоя:
 
-```shell
-ssh-keyscan github.com >> ~/.ssh/known_hosts
-```
+- push в ветку `release` автоматически запускает workflow `Deploy Release`;
+- workflow `Deploy Main` запускается вручную в GitHub Actions.
 
-Укажите ключ в ~/.ssh/config:
-
-```text
-Host github.com
-Hostname github.com
-User git
-IdentityFile ~/.ssh/id_ed25519
-```
-
---- В настройках репозитория на GitHub ---
-
-Перейдите в Settings -> Deploy keys -> Add deploy key
-Вставьте публичный ключ VPS (содержимое ~/.ssh/id_ed25519.pub)
-Права на запись не нужны.
-
-Проверьте, что всё работает:
+На VPS workflow выполняет:
 
 ```shell
-ssh -T git@github.com
-# Ожидаемый ответ: Hi username! You've successfully authenticated...
+docker compose -f compose.release.yaml pull
+docker compose -f compose.release.yaml up -d
 ```
 
-### 5. Запуск бота
+Для локальной разработки:
 
-- для ветки `main`: `npm run docker:main:up`
-- для ветки `release`: `npm run docker:release:up`
-- для локальной разработки: `npm run docker:dev:up`
+```shell
+npm run docker:dev:up
+```
+
+Команды `docker:main:up` и `docker:release:up` также доступны для ручного запуска соответствующих окружений, но они используют образы из GHCR и требуют авторизации, если пакет приватный.
 
 ## ⌨️ Ручные команды для админов
 
