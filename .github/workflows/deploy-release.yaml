@@ -51,7 +51,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GHCR_PAT,GHCR_USER,REPO_URL
+          envs: GHCR_PAT,GHCR_USER,REPO_URL,GROUP_TOKEN,USER_TOKEN,SUPER_ADMINS,POSTGRES_PASSWORD
           script: |
             set -e
             PROJECT_PATH=~/projects/doubletardigrade-bot
@@ -65,6 +65,15 @@ jobs:
             git fetch origin release
             git reset --hard origin/release
 
+            echo "GROUP_TOKEN=${GROUP_TOKEN}" > .env.release
+            echo "USER_TOKEN=${USER_TOKEN}" >> .env.release
+            echo "SUPER_ADMINS=${SUPER_ADMINS}" >> .env.release
+            echo "POSTGRES_DB=postgres" >> .env.release
+            echo "POSTGRES_USER=postgres" >> .env.release
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" >> .env.release
+            echo "POSTGRES_HOST=db" >> .env.release
+            chmod 600 .env.release
+
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose -f compose.release.yaml pull
             docker compose -f compose.release.yaml up -d
@@ -73,3 +82,7 @@ jobs:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           GHCR_USER: ${{ github.repository_owner }}
           REPO_URL: https://${{ github.actor }}:${{ secrets.GHCR_PAT }}@github.com/${{ github.repository }}.git
+          GROUP_TOKEN: ${{ secrets.GROUP_TOKEN }}
+          USER_TOKEN: ${{ secrets.USER_TOKEN }}
+          SUPER_ADMINS: ${{ secrets.SUPER_ADMINS }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
