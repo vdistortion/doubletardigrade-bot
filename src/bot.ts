@@ -130,13 +130,18 @@ async function sendNextQuestion(peerId: number, userId: number, prefix = ''): Pr
 
 async function sendTardigradeDay(peerId: number, userId: number, keyboard: string): Promise<void> {
   const { tardigrade, isNew } = await getTodayTardigrade(String(userId));
-  const head = await buildMentionHead(peerId, userId);
-  const prefix = isNew ? '🎉 Найдена новая тихоходка дня!' : '📖 Эта тихоходка уже была найдена:';
+  const name = await getMention(api, userId);
+  const discoveryText = isNew
+    ? '🎉 Тихоходка дня найдена! Поздравляем с новой находкой.'
+    : '📖 Ты уже находил эту тихоходку сегодня — она снова с тобой.';
 
   await api.messages.send({
     peer_ids: [peerId],
     random_id: randomId(),
-    message: `${head}${BOT_ICON} ${prefix}\n\n✨ ${tardigrade.text}\n\n🔬 ${tardigrade.description || ''}`,
+    message:
+      `${name}, сегодня ты — ${tardigrade.text}.\n\n` +
+      `${discoveryText}\n\n` +
+      `🔬 ${tardigrade.description || ''}`,
     attachment: tardigrade.image || undefined,
     keyboard,
   });
@@ -196,7 +201,6 @@ async function sendMainMenu(
   context: MessageContext,
   hasTardigrades: boolean,
   hasQuestions: boolean,
-  isQuizInProgress: boolean,
 ): Promise<void> {
   if (!context.isChat) {
     await context.send('⌨️', {
@@ -208,7 +212,7 @@ async function sendMainMenu(
     context.peerId,
     context.senderId,
     `${BOT_ICON} Главное меню:`,
-    getMainMenu(hasTardigrades, hasQuestions, isQuizInProgress),
+    getMainMenu(hasTardigrades, hasQuestions),
   );
 }
 
@@ -377,7 +381,7 @@ async function handleAdminAction(
         peerId,
         userId,
         `${BOT_ICON} Главное меню:`,
-        getMainMenu(updatedTardigrades.length > 0, updatedQuestions.length > 0, false),
+        getMainMenu(updatedTardigrades.length > 0, updatedQuestions.length > 0),
       );
     } catch (error: any) {
       console.error('Ошибка при синхронизации альбома:', error);
@@ -617,11 +621,7 @@ updates.on('message_new', async (context: MessageContext) => {
     // ПОЛЬЗОВАТЕЛЬСКОЕ МЕНЮ
     // ─────────────────────────────────────────────────────────────
 
-    const [tardigrades, questions, stats] = await Promise.all([
-      getTardigrades(),
-      getQuestions(),
-      getQuizStats(String(userId)),
-    ]);
+    const [tardigrades, questions] = await Promise.all([getTardigrades(), getQuestions()]);
 
     const hasTardigrades = tardigrades.length > 0;
 
@@ -636,9 +636,7 @@ updates.on('message_new', async (context: MessageContext) => {
         return context.send('⚠️ Бот ещё не настроен.');
       }
 
-      const isQuizInProgress = stats.answered > 0 && stats.answered < stats.total;
-
-      return sendMainMenu(context, hasTardigrades, hasQuestions, isQuizInProgress);
+      return sendMainMenu(context, hasTardigrades, hasQuestions);
     }
 
     if (!hasContent) {
@@ -762,7 +760,7 @@ updates.on('message_event', async (event) => {
 
     if (action === 'tardigrade_day') {
       const [tardigrades, questions] = await Promise.all([getTardigrades(), getQuestions()]);
-      const keyboard = getMainMenu(tardigrades.length > 0, questions.length > 0, false);
+      const keyboard = getMainMenu(tardigrades.length > 0, questions.length > 0);
 
       await sendTardigradeDay(event.peerId, event.userId, keyboard);
       await answer();

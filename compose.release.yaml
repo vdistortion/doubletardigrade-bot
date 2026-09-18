@@ -15,9 +15,8 @@ services:
       retries: 5
 
   bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/vdistortion/doubletardigrade-bot:release
+    pull_policy: always
     restart: always
     env_file: .env.release
     depends_on:
