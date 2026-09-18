@@ -48,7 +48,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: REPO_NAME,GHCR_PAT,GHCR_USER,REPO_URL
+          envs: REPO_NAME,GHCR_PAT,GHCR_USER,REPO_URL,GROUP_TOKEN,USER_TOKEN,SUPER_ADMINS,POSTGRES_PASSWORD
           script: |
             set -e
             PROJECT_PATH=~/projects/${REPO_NAME}_main
@@ -62,6 +62,15 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            echo "GROUP_TOKEN=${GROUP_TOKEN}" > .env.main
+            echo "USER_TOKEN=${USER_TOKEN}" >> .env.main
+            echo "SUPER_ADMINS=${SUPER_ADMINS}" >> .env.main
+            echo "POSTGRES_DB=postgres" >> .env.main
+            echo "POSTGRES_USER=postgres" >> .env.main
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" >> .env.main
+            echo "POSTGRES_HOST=db" >> .env.main
+            chmod 600 .env.main
+
             echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             docker compose -f compose.main.yaml pull
             docker compose -f compose.main.yaml up -d
@@ -71,3 +80,7 @@ jobs:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
           GHCR_USER: ${{ github.repository_owner }}
           REPO_URL: https://${{ github.actor }}:${{ secrets.GHCR_PAT }}@github.com/${{ github.repository }}.git
+          GROUP_TOKEN: ${{ secrets.GROUP_TOKEN }}
+          USER_TOKEN: ${{ secrets.USER_TOKEN }}
+          SUPER_ADMINS: ${{ secrets.SUPER_ADMINS }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
