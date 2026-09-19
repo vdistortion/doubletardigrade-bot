@@ -139,9 +139,9 @@ async function sendTardigradeDay(peerId: number, userId: number, keyboard: strin
     peer_ids: [peerId],
     random_id: randomId(),
     message:
-      `${name}, сегодня ты — ${tardigrade.text}.\n\n` +
+      `🔬 ${name}, сегодня ты — ${tardigrade.text}.\n\n` +
       `${discoveryText}\n\n` +
-      `🔬 ${tardigrade.description || ''}`,
+      `${tardigrade.description || ''}`,
     attachment: tardigrade.image || undefined,
     keyboard,
   });
@@ -201,6 +201,7 @@ async function sendMainMenu(
   context: MessageContext,
   hasTardigrades: boolean,
   hasQuestions: boolean,
+  isQuizInProgress: boolean,
 ): Promise<void> {
   if (!context.isChat) {
     await context.send('⌨️', {
@@ -212,7 +213,7 @@ async function sendMainMenu(
     context.peerId,
     context.senderId,
     `${BOT_ICON} Главное меню:`,
-    getMainMenu(hasTardigrades, hasQuestions),
+    getMainMenu(hasTardigrades, hasQuestions, isQuizInProgress),
   );
 }
 
@@ -381,7 +382,7 @@ async function handleAdminAction(
         peerId,
         userId,
         `${BOT_ICON} Главное меню:`,
-        getMainMenu(updatedTardigrades.length > 0, updatedQuestions.length > 0),
+        getMainMenu(updatedTardigrades.length > 0, updatedQuestions.length > 0, false),
       );
     } catch (error: any) {
       console.error('Ошибка при синхронизации альбома:', error);
@@ -621,7 +622,11 @@ updates.on('message_new', async (context: MessageContext) => {
     // ПОЛЬЗОВАТЕЛЬСКОЕ МЕНЮ
     // ─────────────────────────────────────────────────────────────
 
-    const [tardigrades, questions] = await Promise.all([getTardigrades(), getQuestions()]);
+    const [tardigrades, questions, stats] = await Promise.all([
+      getTardigrades(),
+      getQuestions(),
+      getQuizStats(String(userId)),
+    ]);
 
     const hasTardigrades = tardigrades.length > 0;
 
@@ -636,7 +641,9 @@ updates.on('message_new', async (context: MessageContext) => {
         return context.send('⚠️ Бот ещё не настроен.');
       }
 
-      return sendMainMenu(context, hasTardigrades, hasQuestions);
+      const isQuizInProgress = stats.answered > 0 && stats.answered < stats.total;
+
+      return sendMainMenu(context, hasTardigrades, hasQuestions, isQuizInProgress);
     }
 
     if (!hasContent) {
@@ -760,7 +767,7 @@ updates.on('message_event', async (event) => {
 
     if (action === 'tardigrade_day') {
       const [tardigrades, questions] = await Promise.all([getTardigrades(), getQuestions()]);
-      const keyboard = getMainMenu(tardigrades.length > 0, questions.length > 0);
+      const keyboard = getMainMenu(tardigrades.length > 0, questions.length > 0, false);
 
       await sendTardigradeDay(event.peerId, event.userId, keyboard);
       await answer();

@@ -59,8 +59,7 @@
 1. Установите **Node.js**, **NPM**, **Docker** и **Docker Compose**.
 
 ```shell
-apt update && apt upgrade -y && curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash && curl -fsSL https://get.docker.com | sh && reboot
-nvm install --lts
+apt update && apt upgrade -y && apt install -y nodejs npm && curl -fsSL https://get.docker.com | sh
 ```
 
 2. Склонируйте репозиторий:
