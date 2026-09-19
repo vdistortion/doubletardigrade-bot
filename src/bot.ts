@@ -29,7 +29,8 @@ import {
   getMainMenu,
   quizRestartKeyboard,
 } from './lib/keyboards.js';
-import { getMention } from './lib/mention.js';
+import { getMention, getVkMention } from './lib/mention.js';
+import { formatDescription, messages } from './lib/messages.js';
 
 const BOT_ICON = '👾';
 
@@ -85,16 +86,14 @@ async function sendNextQuestion(peerId: number, userId: number, prefix = ''): Pr
   if (!question) {
     const stats = await getQuizStats(userIdStr);
 
-    let resultMsg =
-      `${BOT_ICON} Все доступные вопросы пройдены!\n` +
-      `📈 Результат: ${stats.correct} из ${stats.total}\n\n`;
+    let resultMsg = messages.quiz.allCompleted(stats.correct, stats.total);
 
     if (stats.percent === 100) {
-      resultMsg += '🏆 Невероятно! Это абсолютный успех!';
+      resultMsg += messages.quiz.perfect;
     } else if (stats.percent === 0) {
-      resultMsg += '🌊 Тихоходки сегодня оказались хитрее. Попробуем ещё раз?';
+      resultMsg += messages.quiz.zero;
     } else {
-      resultMsg += 'Хороший результат!';
+      resultMsg += messages.quiz.good;
     }
 
     const sent = await api.messages.send({
@@ -130,18 +129,13 @@ async function sendNextQuestion(peerId: number, userId: number, prefix = ''): Pr
 
 async function sendTardigradeDay(peerId: number, userId: number, keyboard: string): Promise<void> {
   const { tardigrade, isNew } = await getTodayTardigrade(String(userId));
-  const name = await getMention(api, userId);
-  const discoveryText = isNew
-    ? '🎉 Тихоходка дня найдена! Поздравляем с новой находкой.'
-    : '📖 Ты уже находил эту тихоходку сегодня — она снова с тобой.';
+  const name = isPeerChat(peerId) ? await getVkMention(api, userId) : await getMention(api, userId);
+  const discoveryText = isNew ? messages.tardigrade.found : messages.tardigrade.alreadyFound;
 
   await api.messages.send({
     peer_ids: [peerId],
     random_id: randomId(),
-    message:
-      `👾 ${name}, сегодня ты — ${tardigrade.text}.\n\n` +
-      `${discoveryText}\n\n` +
-      `${tardigrade.description || ''}`,
+    message: `${messages.tardigrade.result(name, tardigrade.text)}\n\n${discoveryText}${formatDescription(tardigrade.description)}`,
     attachment: tardigrade.image || undefined,
     keyboard,
   });
@@ -149,7 +143,7 @@ async function sendTardigradeDay(peerId: number, userId: number, keyboard: strin
 
 async function buildMentionHead(peerId: number, userId: number): Promise<string> {
   if (!isPeerChat(peerId)) return '';
-  const mention = await getMention(api, userId);
+  const mention = await getVkMention(api, userId);
   return mention ? `👤 ${mention}\n\n` : '';
 }
 
@@ -212,7 +206,7 @@ async function sendMainMenu(
   await sendMenu(
     context.peerId,
     context.senderId,
-    `${BOT_ICON} Главное меню:`,
+    messages.mainMenu,
     getMainMenu(hasTardigrades, hasQuestions, isQuizInProgress),
   );
 }
@@ -290,7 +284,7 @@ async function sendAdminMenu(
   enableChats: boolean,
   quizCsvUrl: string | null,
 ): Promise<any> {
-  return send(`${BOT_ICON} Админ-панель:`, {
+  return send(messages.adminMenu, {
     keyboard: getAdminMenu(questions.length > 0, enableMessages, enableChats, quizCsvUrl),
   });
 }
@@ -307,33 +301,14 @@ async function handleAdminAction(
   const quizCsvUrl = await getQuizCsvUrl();
 
   if (action === 'admin_help') {
-    const helpText = [
-      '📖 Справка',
-      '',
-      'Команды:',
-      '/start – открыть главное меню',
-      '/admin – открыть админ-панель (только для администраторов в личных сообщениях).',
-      '',
-      'Загрузка тихоходок дня:',
-      '– Кнопка «🔄 Синхронизация» загружает фото и подписи из указанного альбома ВК в базу тихоходок.',
-      '– Чтобы сменить альбом, отправьте ссылку на альбом группы.',
-      '– Для обновления нажмите «Синхронизация» повторно — старые данные заменятся новыми.',
-      '',
-      'Импорт вопросов квиза:',
-      '– Отправьте боту ссылку на опубликованную Google Таблицу для автоматической загрузки вопросов.',
-      '– После успешного импорта ссылка сохранится, и появится кнопка «🔄 Обновить квиз».',
-      '– Формат ячеек: Вопрос, НомерПравильногоОтвета, Вариант1, Вариант2...',
-      '– Если квиз пуст, используйте кнопку «🧪 Загрузить демо-вопросы».',
-      '',
-      '🌐 Исходный код: https://github.com/vdistortion/doubletardigrade-bot',
-    ].join('\n');
+    const helpText = messages.admin.help;
 
     await send(helpText);
     return true;
   }
 
   if (action === 'bot_mode_toggle_menu') {
-    await send(`${BOT_ICON} Управление режимом бота:`, {
+    await send(messages.botModeMenu, {
       keyboard: getBotModeToggleKeyboard(enable_messages, enable_chats),
     });
 
@@ -345,9 +320,7 @@ async function handleAdminAction(
 
     const updatedSettings = await getBotSettings();
 
-    await send(
-      `✅ Режим для сообщений ${updatedSettings.enable_messages ? 'включен' : 'выключен'}.`,
-    );
+    await send(messages.admin.messagesMode(updatedSettings.enable_messages));
 
     return true;
   }
@@ -357,14 +330,14 @@ async function handleAdminAction(
 
     const updatedSettings = await getBotSettings();
 
-    await send(`✅ Режим для чатов ${updatedSettings.enable_chats ? 'включен' : 'выключен'}.`);
+    await send(messages.admin.chatsMode(updatedSettings.enable_chats));
 
     return true;
   }
 
   if (action === 'sync_album') {
     if (!currentAlbumId) {
-      await send('❌ Альбом не задан. Отправьте ссылку на альбом.');
+      await send(messages.admin.albumNotSet);
       return true;
     }
 
@@ -376,23 +349,21 @@ async function handleAdminAction(
         getQuestions(),
       ]);
 
-      await send(`✅ Синхронизация завершена! Объектов: ${count}`);
+      await send(messages.admin.syncCompleted(count));
 
       await sendMenu(
         peerId,
         userId,
-        `${BOT_ICON} Главное меню:`,
+        messages.mainMenu,
         getMainMenu(updatedTardigrades.length > 0, updatedQuestions.length > 0, false),
       );
     } catch (error: any) {
       console.error('Ошибка при синхронизации альбома:', error);
 
-      let errorMessage =
-        '‼ Не удалось синхронизировать альбом. Пожалуйста, проверьте настройки группы и альбома.';
+      let errorMessage = messages.admin.syncFailed;
 
       if (error.code === 15 || error.code === 200) {
-        errorMessage =
-          '‼ Не удалось синхронизировать альбом. Убедитесь, что сообщество открыто, и повторите попытку.';
+        errorMessage = messages.admin.syncFailedClosedGroup;
       }
 
       await send(errorMessage);
@@ -405,13 +376,13 @@ async function handleAdminAction(
     const tardigrades = await getTardigrades();
 
     if (!tardigrades.length) {
-      await send('❌ Пусто.');
+      await send(messages.admin.empty);
       return true;
     }
 
     const rand = tardigrades[Math.floor(Math.random() * tardigrades.length)];
 
-    await send(`🧪 Тест:\n\n${rand.text}`, {
+    await send(messages.admin.testResult(rand.text), {
       attachment: rand.image || undefined,
     });
 
@@ -428,14 +399,14 @@ async function handleAdminAction(
 
       const count = await importQuestionsFromCsv(csvText);
 
-      await send(`✅ Загружено ${count} демо-вопросов.`);
+      await send(messages.admin.demoLoaded(count));
 
       const [updatedTardigrades, updatedQuestions] = await Promise.all([
         getTardigrades(),
         getQuestions(),
       ]);
 
-      await send(`${BOT_ICON} Админ-панель:`, {
+      await send(messages.adminMenu, {
         keyboard: getAdminMenu(
           updatedQuestions.length > 0,
           enable_messages,
@@ -444,7 +415,7 @@ async function handleAdminAction(
         ),
       });
     } catch (error: any) {
-      await send(`❌ Ошибка загрузки демо: ${error.message}`);
+      await send(messages.admin.demoLoadFailed(error.message));
     }
 
     return true;
@@ -454,7 +425,7 @@ async function handleAdminAction(
     const url = await getQuizCsvUrl();
 
     if (!url) {
-      await send('❌ Нет сохранённой ссылки.');
+      await send(messages.admin.quizUrlMissing);
       return true;
     }
 
@@ -462,15 +433,15 @@ async function handleAdminAction(
       const csvText = await fetchGoogleSheetCsv(url);
       const count = await importQuestionsFromCsv(csvText);
 
-      await send(`✅ Квиз обновлён из таблицы. Загружено ${count} вопросов.`);
+      await send(messages.admin.quizRefreshed(count));
 
       const updatedQuestions = await getQuestions();
 
-      await send(`${BOT_ICON} Админ-панель:`, {
+      await send(messages.adminMenu, {
         keyboard: getAdminMenu(updatedQuestions.length > 0, enable_messages, enable_chats, url),
       });
     } catch (error: any) {
-      await send(`❌ Не удалось обновить квиз: ${error.message}`);
+      await send(messages.admin.quizRefreshFailed(error.message));
     }
 
     return true;
@@ -556,7 +527,7 @@ updates.on('message_new', async (context: MessageContext) => {
               getQuestions(),
             ]);
 
-            await context.send(`✅ Альбом обновлён и синхронизирован. Объектов: ${count}`);
+            await context.send(messages.admin.albumUpdated(count));
 
             return sendAdminMenu(
               context.send.bind(context),
@@ -566,13 +537,11 @@ updates.on('message_new', async (context: MessageContext) => {
               quizCsvUrl,
             );
           } catch (error: any) {
-            return context.send(
-              `❌ Альбом сохранён, но синхронизация не удалась: ${error.message}`,
-            );
+            return context.send(messages.admin.albumSyncFailed(error.message));
           }
         }
 
-        return context.send('❌ Альбом не принадлежит этому сообществу.');
+        return context.send(messages.admin.albumNotBelongToGroup);
       }
 
       // Импорт вопросов из Google Таблицы.
@@ -591,9 +560,7 @@ updates.on('message_new', async (context: MessageContext) => {
 
           const updatedQuestions = await getQuestions();
 
-          await context.send(
-            `✅ Импортировано ${count} вопросов из Google Таблицы. Ссылка сохранена для автообновления.`,
-          );
+          await context.send(messages.admin.questionsImported(count));
 
           return sendAdminMenu(
             context.send.bind(context),
@@ -603,7 +570,7 @@ updates.on('message_new', async (context: MessageContext) => {
             url,
           );
         } catch (error: any) {
-          return context.send(`❌ Не удалось загрузить таблицу: ${error.message}`);
+          return context.send(messages.admin.importFailed(error.message));
         }
       }
     }
@@ -638,7 +605,7 @@ updates.on('message_new', async (context: MessageContext) => {
     // Если контента нет — сообщаем, что бот не настроен.
     if (command === '/start' || command === 'начать' || action === 'start') {
       if (!hasContent) {
-        return context.send('⚠️ Бот ещё не настроен.');
+        return context.send(messages.botNotConfigured);
       }
 
       const isQuizInProgress = stats.answered > 0 && stats.answered < stats.total;
@@ -651,7 +618,7 @@ updates.on('message_new', async (context: MessageContext) => {
     }
   } catch (error) {
     console.error('Bot error:', error);
-    await context.send('❌ Произошла ошибка.');
+    await context.send(messages.genericError);
   }
 });
 
@@ -695,7 +662,7 @@ updates.on('message_event', async (event) => {
         buttonPayload = JSON.parse(rawEventPayload);
       } catch (e) {
         console.error('Ошибка парсинга eventPayload:', rawEventPayload, e);
-        await answer('Ошибка данных кнопки.');
+        await answer(messages.callback.invalidData);
         return;
       }
     } else if (typeof rawEventPayload === 'object' && rawEventPayload !== null) {
@@ -709,7 +676,7 @@ updates.on('message_event', async (event) => {
 
     if (!buttonPayload?.action) {
       console.warn('Callback без action:', rawEventPayload);
-      await answer('Неизвестная кнопка.');
+      await answer(messages.callback.unknown);
       return;
     }
 
@@ -738,7 +705,7 @@ updates.on('message_event', async (event) => {
       const isAdmin = await checkAdmin(event.userId);
 
       if (!isAdmin || isChatPeer) {
-        await answer('Недоступно.');
+        await answer(messages.callback.unavailable);
         return;
       }
 
@@ -781,11 +748,7 @@ updates.on('message_event', async (event) => {
     if (action === 'quiz_reset') {
       await answer();
       await resetQuiz(String(event.userId));
-      await sendNextQuestion(
-        event.peerId,
-        event.userId,
-        `${BOT_ICON} Прогресс квиза сброшен. Начинаем новый квиз!\n\n`,
-      );
+      await sendNextQuestion(event.peerId, event.userId, `${messages.quiz.reset}\n\n`);
       return;
     }
 
@@ -798,12 +761,12 @@ updates.on('message_event', async (event) => {
       const isCorrect = Boolean(buttonPayload.isCorrect);
 
       if (buttonPayload.uid && Number(buttonPayload.uid) !== event.userId) {
-        await answer('Это не ваша кнопка.');
+        await answer(messages.callback.notYourButton);
         return;
       }
 
       if (!Number.isFinite(qid)) {
-        await answer('Произошла ошибка в данных кнопки.');
+        await answer(messages.callback.invalidButtonData);
         return;
       }
 
@@ -812,12 +775,12 @@ updates.on('message_event', async (event) => {
       const activeCmid = await getActiveMessage(senderStr, peerIdStr);
 
       if (typeof eventCmid !== 'number' || !activeCmid || eventCmid !== activeCmid) {
-        await answer('Этот вопрос уже неактивен.');
+        await answer(messages.callback.inactiveQuestion);
         return;
       }
 
       if (await isQuestionAnswered(senderStr, qid)) {
-        await answer('Вы уже ответили на этот вопрос.');
+        await answer(messages.callback.alreadyAnswered);
         return;
       }
 
@@ -825,13 +788,13 @@ updates.on('message_event', async (event) => {
       const question = questions.find((q) => q.id === qid);
 
       if (!question) {
-        await answer('Произошла ошибка: вопрос не найден.');
+        await answer(messages.callback.questionNotFound);
         return;
       }
 
       await saveQuizAnswer(senderStr, qid, isCorrect);
 
-      const feedbackText = isCorrect ? '✅ Верно!' : '❌ Неправильно.';
+      const feedbackText = isCorrect ? messages.quiz.correct : messages.quiz.incorrect;
       const head = await buildMentionHead(event.peerId, event.userId);
 
       // Теперь answer() вызывается только здесь.
@@ -879,10 +842,7 @@ updates.on('message_event', async (event) => {
 
       const finalStats = await getQuizStats(senderStr);
 
-      const finalMessage =
-        head +
-        `${BOT_ICON} Квиз завершён! ` +
-        `Результат: ${finalStats.correct} из ${finalStats.total}`;
+      const finalMessage = head + messages.quiz.finished(finalStats.correct, finalStats.total);
 
       try {
         await api.messages.edit({
@@ -919,11 +879,11 @@ updates.on('message_event', async (event) => {
 
     console.warn('Необработанный inline action:', action);
 
-    await answer(`Необработанное действие: ${action}`);
+    await answer(messages.callback.unhandledAction(action));
   } catch (error) {
     console.error('Ошибка в обработчике message_event:', error);
 
-    await answer('Произошла ошибка.');
+    await answer(messages.callback.generic);
   } finally {
     await answer();
   }

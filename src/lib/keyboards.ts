@@ -1,4 +1,5 @@
 import type { QuizQuestion } from './db.js';
+import { messages } from './messages.js';
 
 const digitEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 
@@ -71,7 +72,7 @@ export function getMainMenu(
     mainRow.push({
       action: {
         type: 'callback',
-        label: '👾 Тихоходка дня',
+        label: messages.buttons.tardigradeDay,
         payload: JSON.stringify({ action: 'tardigrade_day' }),
       },
       color: 'primary',
@@ -81,7 +82,7 @@ export function getMainMenu(
     mainRow.push({
       action: {
         type: 'callback',
-        label: isQuizInProgress ? '🔬 Продолжить квиз' : '🔬 Квиз',
+        label: isQuizInProgress ? messages.buttons.continueQuiz : messages.buttons.quiz,
         payload: JSON.stringify({ action: 'quiz' }),
       },
       color: 'secondary',
@@ -108,7 +109,7 @@ export function getAdminMenu(
       {
         action: {
           type: 'callback',
-          label: '🔄 Синхронизация',
+          label: messages.buttons.sync,
           payload: JSON.stringify({ action: 'sync_album' }),
         },
         color: 'primary',
@@ -116,7 +117,7 @@ export function getAdminMenu(
       {
         action: {
           type: 'callback',
-          label: '🧪 Тест выдачи',
+          label: messages.buttons.testTardigrade,
           payload: JSON.stringify({ action: 'test_tardigrade' }),
         },
         color: 'secondary',
@@ -132,7 +133,7 @@ export function getAdminMenu(
     questionButtons.push({
       action: {
         type: 'callback',
-        label: '🧪 Загрузить демо‑вопросы',
+        label: messages.buttons.loadDemoQuestions,
         payload: JSON.stringify({ action: 'load_demo_questions' }),
       },
       color: 'positive',
@@ -144,7 +145,7 @@ export function getAdminMenu(
     questionButtons.push({
       action: {
         type: 'callback',
-        label: '🔄 Обновить квиз',
+        label: messages.buttons.refreshQuiz,
         payload: JSON.stringify({ action: 'refresh_quiz' }),
       },
       color: 'primary',
@@ -153,16 +154,16 @@ export function getAdminMenu(
   if (questionButtons.length > 0) buttons.push(questionButtons);
 
   // Режим работы
-  let modeLabel = 'Режим: Выключен';
+  let modeLabel = messages.buttons.modeDisabled;
   let modeColor: 'negative' | 'positive' | 'primary' = 'negative';
   if (enableMessages && enableChats) {
-    modeLabel = 'Режим: Сообщения и Чаты';
+    modeLabel = messages.buttons.modeMessagesAndChats;
     modeColor = 'positive';
   } else if (enableMessages) {
-    modeLabel = 'Режим: Только Сообщения';
+    modeLabel = messages.buttons.modeMessagesOnly;
     modeColor = 'primary';
   } else if (enableChats) {
-    modeLabel = 'Режим: Только Чаты';
+    modeLabel = messages.buttons.modeChatsOnly;
     modeColor = 'primary';
   }
 
@@ -182,7 +183,7 @@ export function getAdminMenu(
     {
       action: {
         type: 'callback',
-        label: '❓ Справка',
+        label: messages.buttons.help,
         payload: JSON.stringify({ action: 'admin_help' }),
       },
       color: 'default',
@@ -200,7 +201,9 @@ export function getBotModeToggleKeyboard(enableMessages: boolean, enableChats: b
         {
           action: {
             type: 'callback',
-            label: enableMessages ? '❌ Выключить для сообщений' : '✅ Включить для сообщений',
+            label: enableMessages
+              ? messages.buttons.disableMessages
+              : messages.buttons.enableMessages,
             payload: JSON.stringify({ action: 'toggle_mode_messages' }),
           },
           color: enableMessages ? 'negative' : 'positive',
@@ -210,7 +213,7 @@ export function getBotModeToggleKeyboard(enableMessages: boolean, enableChats: b
         {
           action: {
             type: 'callback',
-            label: enableChats ? '❌ Выключить для чатов' : '✅ Включить для чатов',
+            label: enableChats ? messages.buttons.disableChats : messages.buttons.enableChats,
             payload: JSON.stringify({ action: 'toggle_mode_chats' }),
           },
           color: enableChats ? 'negative' : 'positive',
@@ -227,7 +230,7 @@ export const quizRestartKeyboard = JSON.stringify({
       {
         action: {
           type: 'callback',
-          label: '👾 Тихоходка дня',
+          label: messages.buttons.tardigradeDay,
           payload: JSON.stringify({ action: 'tardigrade_day' }),
         },
         color: 'primary',
@@ -235,7 +238,7 @@ export const quizRestartKeyboard = JSON.stringify({
       {
         action: {
           type: 'callback',
-          label: '🔬 Квиз',
+          label: messages.buttons.quiz,
           payload: JSON.stringify({ action: 'quiz_reset' }),
         },
         color: 'secondary',
