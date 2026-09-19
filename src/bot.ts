@@ -139,7 +139,7 @@ async function sendTardigradeDay(peerId: number, userId: number, keyboard: strin
     peer_ids: [peerId],
     random_id: randomId(),
     message:
-      `🔬 ${name}, сегодня ты — ${tardigrade.text}.\n\n` +
+      `👾 ${name}, сегодня ты — ${tardigrade.text}.\n\n` +
       `${discoveryText}\n\n` +
       `${tardigrade.description || ''}`,
     attachment: tardigrade.image || undefined,
