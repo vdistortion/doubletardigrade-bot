@@ -57,8 +57,13 @@ export function generateQuestionMessageAndKeyboard(
  * Главное меню
  * @param hasTardigrades есть тихоходки
  * @param hasQuestions есть вопросы квиза
+ * @param isQuizInProgress квиз начат
  */
-export function getMainMenu(hasTardigrades: boolean, hasQuestions: boolean): string {
+export function getMainMenu(
+  hasTardigrades: boolean,
+  hasQuestions: boolean,
+  isQuizInProgress: boolean,
+): string {
   const buttons: any[] = [];
   const mainRow: any[] = [];
 
@@ -76,7 +81,7 @@ export function getMainMenu(hasTardigrades: boolean, hasQuestions: boolean): str
     mainRow.push({
       action: {
         type: 'callback',
-        label: '🔬 Квиз',
+        label: isQuizInProgress ? '🔬 Продолжить квиз' : '🔬 Квиз',
         payload: JSON.stringify({ action: 'quiz' }),
       },
       color: 'secondary',
@@ -230,10 +235,10 @@ export const quizRestartKeyboard = JSON.stringify({
       {
         action: {
           type: 'callback',
-          label: '🔄 Пройти заново',
+          label: '🔬 Квиз',
           payload: JSON.stringify({ action: 'quiz_reset' }),
         },
-        color: 'positive',
+        color: 'secondary',
       },
     ],
   ],
