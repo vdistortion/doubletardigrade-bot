@@ -1,4 +1,5 @@
 import { Pool } from 'pg';
+import { messages } from './messages.js';
 
 function getPool(): Pool {
   const { POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_DB } = process.env;
@@ -65,7 +66,7 @@ export async function getTodayTardigrade(
   const list = await getTardigrades();
   if (list.length === 0) {
     return {
-      tardigrade: { id: 0, text: 'Тихоходок пока нет', description: '', image: null },
+      tardigrade: { id: 0, text: messages.tardigrade.empty, description: '', image: null },
       isNew: true,
     };
   }
@@ -101,7 +102,7 @@ export async function syncAlbum(groupId: number, albumId: number, vkUserApi: any
     (p: any) => {
       const lines = (p.text || '').split('\n');
       return {
-        text: lines[0] || 'Без названия',
+        text: lines[0] || messages.tardigrade.untitled,
         description: lines.slice(1).join('\n') || null,
         image: `photo${p.owner_id}_${p.id}`,
       };
@@ -159,7 +160,7 @@ export async function importQuestionsFromCsv(csvText: string): Promise<number> {
     questions.push({ question, options, correct: correctNum });
   }
 
-  if (questions.length === 0) throw new Error('Не найдено ни одного корректного вопроса в CSV');
+  if (questions.length === 0) throw new Error(messages.quiz.invalidCsv);
 
   const client = await db().connect();
   try {

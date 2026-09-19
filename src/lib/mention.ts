@@ -28,3 +28,8 @@ export async function getMention(api: API, userId: number): Promise<string> {
 
   return name;
 }
+
+export async function getVkMention(api: API, userId: number): Promise<string> {
+  const name = await getMention(api, userId);
+  return `[id${userId}|${name}]`;
+}
